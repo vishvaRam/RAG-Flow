@@ -1,0 +1,48 @@
+services:
+  rag-service:
+    container_name: rag_service
+    build: . 
+    
+    ports:
+      # Maps host port 4545 to container port 4545
+      - "4545:4545"
+    network_mode: "host"
+    
+    environment:
+      # Elasticsearch
+      ELASTICSEARCH_HOST: localhost
+      ELASTICSEARCH_PORT: 9200
+      INDEX_NAME: documents
+      
+      # Gemini via OpenAI
+      GEMINI_API_KEY: ${GEMINI_API_KEY}
+      GEMINI_MODEL: gemini-2.0-flash-exp
+      GEMINI_EMBEDDING_MODEL: models/gemini-embedding-001
+      EMBEDDING_DIMS: 768
+      
+      # Reranker
+      RERANKER_URL: http://localhost:5656
+      
+      # RAG settings
+      TOP_K_RETRIEVAL: 20
+      TOP_K_RERANK: 5
+      HYBRID_ALPHA: 0.5
+      
+      # API settings
+      MAX_TOKENS: 2048
+      TEMPERATURE: 0.7
+      MODEL_NAME: ""
+
+      RAG_PORT: 4545
+      RAG_GUNICORN_WORKERS: 2
+    
+    ipc: host
+    ulimits:
+      memlock: -1
+      stack: 67108864
+      
+    # networks:
+    #   - shared_app_network 
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4

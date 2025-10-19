@@ -1,0 +1,13 @@
+fastapi
+uvicorn[standard]
+gunicorn
+openai
+elasticsearch
+pydantic
+pydantic-settings
+python-dotenv
+httpx
+tenacity
+uv
+langchain-google-genai
+
