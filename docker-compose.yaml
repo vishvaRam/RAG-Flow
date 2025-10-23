@@ -7,6 +7,8 @@ services:
       # Maps host port 4545 to container port 4545
       - "4545:4545"
     network_mode: "host"
+    volumes:
+      - ./:/app
     
     environment:
       # Elasticsearch
@@ -16,7 +18,7 @@ services:
       
       # Gemini via OpenAI
       GEMINI_API_KEY: ${GEMINI_API_KEY}
-      GEMINI_MODEL: gemini-2.0-flash-exp
+      GEMINI_MODEL: gemini-2.5-flash
       GEMINI_EMBEDDING_MODEL: models/gemini-embedding-001
       EMBEDDING_DIMS: 768
       
@@ -30,8 +32,7 @@ services:
       
       # API settings
       MAX_TOKENS: 2048
-      TEMPERATURE: 0.7
-      MODEL_NAME: ""
+      TEMPERATURE: 0.5
 
       RAG_PORT: 4545
       RAG_GUNICORN_WORKERS: 2

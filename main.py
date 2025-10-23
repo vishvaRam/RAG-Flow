@@ -5,15 +5,25 @@ from contextlib import asynccontextmanager
 import uvicorn
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel, Field
-from openai import OpenAI
 from elasticsearch import Elasticsearch
 import httpx
 from tenacity import retry, stop_after_attempt, wait_exponential
 import json
 import time
 from functools import wraps
+
+# Langfuse imports
+from langfuse import get_client, observe
+from langfuse.openai import openai
+
+# LangChain and Utils
 from langchain_google_genai import GoogleGenerativeAIEmbeddings
+from Utils.Config import config
+from Utils.models import ChatRequest, SearchRequest, SearchResponse, SearchResult
+
+
+# Initialize Langfuse client
+langfuse = get_client()
 
 
 # Create logs directory if it doesn't exist
@@ -41,7 +51,7 @@ def log_time(operation_name: str):
             start_time = time.time()
             try:
                 result = await func(*args, **kwargs)
-                duration = (time.time() - start_time) * 1000  # Convert to milliseconds
+                duration = (time.time() - start_time) * 1000
                 logger.info(f"⏱️  {operation_name} took {duration:.2f}ms")
                 return result
             except Exception as e:
@@ -52,114 +62,29 @@ def log_time(operation_name: str):
     return decorator
 
 
-# Load environment variables with type conversion
-def get_env_int(key: str, default: int) -> int:
-    """Get environment variable as integer"""
-    value = os.getenv(key)
-    return int(value) if value else default
-
-
-def get_env_float(key: str, default: float) -> float:
-    """Get environment variable as float"""
-    value = os.getenv(key)
-    return float(value) if value else default
-
-
-def get_env_bool(key: str, default: bool) -> bool:
-    """Get environment variable as boolean"""
-    value = os.getenv(key)
-    if value is None:
-        return default
-    return value.lower() in ('true', '1', 'yes', 'on')
-
-
-# Configuration from environment variables
-class Config:
-    # Elasticsearch
-    ELASTICSEARCH_HOST = os.getenv("ELASTICSEARCH_HOST", "localhost")
-    ELASTICSEARCH_PORT = get_env_int("ELASTICSEARCH_PORT", 9200)
-    INDEX_NAME = os.getenv("INDEX_NAME", "documents")
-    
-    # Gemini via OpenAI (for LLM only)
-    GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-    GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.0-flash-exp")
-    
-    # Google Embeddings via LangChain
-    GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY") or os.getenv("GEMINI_API_KEY")
-    GEMINI_EMBEDDING_MODEL = os.getenv("GEMINI_EMBEDDING_MODEL", "models/text-embedding-004")
-    EMBEDDING_DIMS = get_env_int("EMBEDDING_DIMS", 768)
-    
-    # Reranker
-    RERANKER_URL = os.getenv("RERANKER_URL", "http://localhost:5656")
-    
-    # RAG settings
-    TOP_K_RETRIEVAL = get_env_int("TOP_K_RETRIEVAL", 20)
-    TOP_K_RERANK = get_env_int("TOP_K_RERANK", 5)
-    HYBRID_ALPHA = get_env_float("HYBRID_ALPHA", 0.5)
-    
-    # API settings
-    MAX_TOKENS = get_env_int("MAX_TOKENS", 2048)
-    TEMPERATURE = get_env_float("TEMPERATURE", 0.7)
-
-
-config = Config()
-
 # Validate required environment variables
 if not config.GEMINI_API_KEY:
     raise ValueError("GEMINI_API_KEY environment variable is required")
 if not config.GOOGLE_API_KEY:
     raise ValueError("GOOGLE_API_KEY environment variable is required")
 
-# Initialize clients
-openai_client = OpenAI(
+
+# Initialize OpenAI client with Langfuse wrapper
+openai_client = openai.OpenAI(
     api_key=config.GEMINI_API_KEY,
     base_url="https://generativelanguage.googleapis.com/v1beta/openai/"
 )
 
+
+# Initialize Elasticsearch client
 es_client = Elasticsearch([f"http://{config.ELASTICSEARCH_HOST}:{config.ELASTICSEARCH_PORT}"])
+
 
 # Initialize Google Embeddings model
 embeddings_model = GoogleGenerativeAIEmbeddings(
     model=config.GEMINI_EMBEDDING_MODEL,
     google_api_key=config.GOOGLE_API_KEY,
 )
-
-
-# Pydantic models
-class ChatMessage(BaseModel):
-    role: str = Field(..., description="Role: 'user', 'assistant', or 'system'")
-    content: str = Field(..., description="Message content")
-
-
-class ChatRequest(BaseModel):
-    messages: List[ChatMessage] = Field(..., description="Conversation history")
-    stream: bool = Field(default=False, description="Enable streaming response")
-    subject_filter: Optional[str] = Field(None, description="Filter by subject")
-    topic_filter: Optional[str] = Field(None, description="Filter by topic")
-    top_k: Optional[int] = Field(None, description="Override top_k reranking")
-    temperature: Optional[float] = Field(None, description="Override temperature")
-
-
-class SearchRequest(BaseModel):
-    query: str = Field(..., description="Search query")
-    top_k: int = Field(default=5, description="Number of results")
-    subject_filter: Optional[str] = None
-    topic_filter: Optional[str] = None
-
-
-class SearchResult(BaseModel):
-    text: str
-    score: float
-    subject: str
-    topic: str
-    file_path: str
-    chunk_id: str
-
-
-class SearchResponse(BaseModel):
-    query: str
-    results: List[SearchResult]
-    total_found: int
 
 
 # Lifespan context manager
@@ -175,6 +100,16 @@ async def lifespan(app: FastAPI):
     logger.info(f"  - Embedding Model: {config.GEMINI_EMBEDDING_MODEL}")
     logger.info(f"  - Embedding Dimensions: {config.EMBEDDING_DIMS}")
     logger.info(f"  - Reranker URL: {config.RERANKER_URL}")
+    
+    # Check Langfuse connection
+    try:
+        if langfuse.auth_check():
+            logger.info(f"✓ Connected to Langfuse at {config.LANGFUSE_HOST}")
+        else:
+            logger.warning("⚠ Langfuse authentication failed - check credentials")
+    except Exception as e:
+        logger.error(f"✗ Langfuse connection failed: {e}")
+        logger.warning("⚠ Continuing without Langfuse tracing")
     
     # Check Elasticsearch connection
     try:
@@ -200,6 +135,13 @@ async def lifespan(app: FastAPI):
     yield
     
     # Shutdown
+    logger.info("Flushing Langfuse traces...")
+    try:
+        langfuse.flush()
+        logger.info("✓ Langfuse traces flushed")
+    except Exception as e:
+        logger.error(f"Error flushing Langfuse: {e}")
+    
     logger.info("Shutting down RAG API service...")
     es_client.close()
     logger.info("✓ RAG API service shut down")
@@ -219,40 +161,24 @@ app = FastAPI(
 async def log_request_time(request: Request, call_next):
     """Log total request processing time"""
     start_time = time.time()
-    
-    # Log request details
     logger.info(f"🔵 Request: {request.method} {request.url.path}")
     
     response = await call_next(request)
     
-    # Calculate duration
-    duration = (time.time() - start_time) * 1000  # Convert to milliseconds
-    
-    # Log response details
+    duration = (time.time() - start_time) * 1000
     logger.info(f"🟢 Response: {request.method} {request.url.path} - Status: {response.status_code} - Duration: {duration:.2f}ms")
-    
-    # Add timing header to response
     response.headers["X-Process-Time"] = f"{duration:.2f}ms"
     
     return response
 
 
-# Helper functions with timing
+# Helper functions with timing and observability
+@observe()
 @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10))
 @log_time("Embedding generation (query)")
 async def get_embedding(text: str, task_type: str = "retrieval_query") -> List[float]:
-    """
-    Generate embedding using Google Generative AI Embeddings via LangChain
-    
-    Args:
-        text: Text to embed
-        task_type: Either "retrieval_query" for queries or "retrieval_document" for documents
-    
-    Returns:
-        List of floats representing the embedding vector
-    """
+    """Generate embedding using Google Generative AI Embeddings via LangChain"""
     try:
-        # Use embed_query for query embeddings (single text)
         if task_type == "retrieval_query":
             embedding = embeddings_model.embed_query(
                 text,
@@ -260,7 +186,6 @@ async def get_embedding(text: str, task_type: str = "retrieval_query") -> List[f
                 task_type=task_type
             )
         else:
-            # Use embed_documents for document embeddings (returns list)
             embeddings = embeddings_model.embed_documents(
                 [text],
                 output_dimensionality=config.EMBEDDING_DIMS,
@@ -275,6 +200,7 @@ async def get_embedding(text: str, task_type: str = "retrieval_query") -> List[f
         raise
 
 
+@observe()
 @log_time("Elasticsearch hybrid search")
 async def hybrid_search(
     query: str,
@@ -286,7 +212,6 @@ async def hybrid_search(
 ) -> List[Dict[str, Any]]:
     """Perform hybrid search combining BM25 and vector search"""
     
-    # Build filter conditions
     filter_conditions = []
     if subject_filter:
         filter_conditions.append({"term": {"subject": subject_filter}})
@@ -295,7 +220,6 @@ async def hybrid_search(
     
     must_clause = filter_conditions if filter_conditions else []
     
-    # Hybrid search query
     search_body = {
         "size": top_k,
         "query": {
@@ -353,6 +277,7 @@ async def hybrid_search(
         raise
 
 
+@observe()
 @log_time("Document reranking")
 async def rerank_documents(query: str, documents: List[Dict[str, Any]], top_k: int = 5) -> List[Dict[str, Any]]:
     """Rerank documents using cross-encoder"""
@@ -373,7 +298,6 @@ async def rerank_documents(query: str, documents: List[Dict[str, Any]], top_k: i
             
             reranked_results = response.json()["results"]
             
-            # Map reranked results back to original documents with metadata
             reranked_docs = []
             for result in reranked_results:
                 original_doc = documents[result["index"]]
@@ -404,22 +328,29 @@ def build_context(documents: List[Dict[str, Any]]) -> str:
 
 
 def create_rag_prompt(query: str, context: str) -> str:
-    """Create RAG prompt with context"""
-    return f"""You are a knowledgeable assistant helping with educational content. Use the provided context to answer the user's question accurately and comprehensively.
+    """Create RAG prompt with context for JEE exam preparation"""
+    return f"""You are an expert JEE (Joint Entrance Examination) tutor with deep knowledge of Physics, Chemistry, and Mathematics. Your role is to provide accurate, exam-focused explanations based on standard JEE textbooks and syllabus.
 
-Context:
-{context}
+    Context Information:
+    {context}
 
-User Question: {query}
+    Student Question: {query}
 
-Instructions:
-- Answer based primarily on the provided context
-- If the context doesn't contain enough information, acknowledge this
-- Cite specific documents when making claims (e.g., "According to Document 1...")
-- Be concise but thorough
-- Use technical terms appropriately
+    Instructions:
+    - Provide accurate answers based ONLY on the information given in the context above
+    - If the context doesn't contain sufficient information to answer the question, clearly state "I don't have enough information to answer this question accurately"
+    - Use proper mathematical notation with LaTeX formatting for all formulas and equations for markdown rendering
+    - Explain concepts step-by-step when solving problems
+    - Include relevant formulas, derivations, and numerical calculations where applicable
+    - Use SI units and standard notation as per JEE guidelines
+    - Be precise with terminology, constants, and units
+    - Format chemical equations properly
+    - For problem-solving, show clear steps: Given → Formula → Substitution → Calculation → Final Answer
+    - Do NOT make assumptions or add information not present in the context
+    - Keep explanations clear, concise, and exam-oriented
+    - Never reference the context directly in your answers
 
-Answer:"""
+    Answer:"""
 
 
 # API Endpoints
@@ -432,6 +363,7 @@ async def root():
         "model": config.GEMINI_MODEL,
         "embedding_model": config.GEMINI_EMBEDDING_MODEL,
         "embedding_dims": config.EMBEDDING_DIMS,
+        "langfuse_enabled": bool(config.LANGFUSE_PUBLIC_KEY and config.LANGFUSE_SECRET_KEY),
         "endpoints": {
             "/chat": "Chat with RAG",
             "/search": "Search documents",
@@ -448,6 +380,7 @@ async def health_check():
         "status": "healthy",
         "elasticsearch": "unknown",
         "reranker": "unknown",
+        "langfuse": "unknown",
         "config": {
             "index": config.INDEX_NAME,
             "model": config.GEMINI_MODEL,
@@ -456,7 +389,6 @@ async def health_check():
         }
     }
     
-    # Check Elasticsearch
     try:
         es_client.cluster.health()
         health_status["elasticsearch"] = "healthy"
@@ -464,7 +396,6 @@ async def health_check():
         health_status["elasticsearch"] = f"unhealthy: {str(e)}"
         health_status["status"] = "degraded"
     
-    # Check reranker
     try:
         async with httpx.AsyncClient(timeout=5.0) as client:
             response = await client.get(f"{config.RERANKER_URL}/health")
@@ -477,19 +408,26 @@ async def health_check():
         health_status["reranker"] = f"unhealthy: {str(e)}"
         health_status["status"] = "degraded"
     
+    try:
+        if langfuse.auth_check():
+            health_status["langfuse"] = "healthy"
+        else:
+            health_status["langfuse"] = "authentication failed"
+    except Exception as e:
+        health_status["langfuse"] = f"unhealthy: {str(e)}"
+    
     return health_status
 
 
 @app.post("/search", response_model=SearchResponse)
+@observe()
 async def search_endpoint(request: SearchRequest):
     """Search documents using hybrid search and reranking"""
     try:
         logger.info(f"🔍 Search query: '{request.query}' (top_k={request.top_k})")
         
-        # Generate query embedding (use retrieval_query task type)
         query_vector = await get_embedding(request.query, task_type="retrieval_query")
         
-        # Hybrid search
         results = await hybrid_search(
             query=request.query,
             query_vector=query_vector,
@@ -499,7 +437,6 @@ async def search_endpoint(request: SearchRequest):
             alpha=config.HYBRID_ALPHA
         )
         
-        # Rerank
         if results:
             reranked_results = await rerank_documents(
                 query=request.query,
@@ -509,7 +446,6 @@ async def search_endpoint(request: SearchRequest):
         else:
             reranked_results = []
         
-        # Format response
         search_results = [
             SearchResult(
                 text=doc["text"][:500] + "..." if len(doc["text"]) > 500 else doc["text"],
@@ -536,10 +472,10 @@ async def search_endpoint(request: SearchRequest):
 
 
 @app.post("/chat")
+@observe()
 async def chat_endpoint(request: ChatRequest):
     """Chat endpoint with RAG"""
     try:
-        # Extract last user message as query
         user_messages = [msg for msg in request.messages if msg.role == "user"]
         if not user_messages:
             raise HTTPException(status_code=400, detail="No user message found")
@@ -547,10 +483,8 @@ async def chat_endpoint(request: ChatRequest):
         query = user_messages[-1].content
         logger.info(f"💬 Chat query: '{query[:100]}...'")
         
-        # Generate query embedding (use retrieval_query task type)
         query_vector = await get_embedding(query, task_type="retrieval_query")
         
-        # Hybrid search
         results = await hybrid_search(
             query=query,
             query_vector=query_vector,
@@ -560,7 +494,6 @@ async def chat_endpoint(request: ChatRequest):
             alpha=config.HYBRID_ALPHA
         )
         
-        # Rerank
         top_k = request.top_k or config.TOP_K_RERANK
         if results:
             reranked_results = await rerank_documents(
@@ -571,29 +504,21 @@ async def chat_endpoint(request: ChatRequest):
         else:
             reranked_results = []
         
-        # Build context
         context = build_context(reranked_results)
-        
-        # Create RAG prompt
         rag_prompt = create_rag_prompt(query, context)
         
-        # Prepare messages for Gemini
         gemini_messages = [
             {"role": "system", "content": "You are a helpful educational assistant with access to course materials."}
         ]
         
-        # Add conversation history (excluding last user message)
         for msg in request.messages[:-1]:
             gemini_messages.append({"role": msg.role, "content": msg.content})
         
-        # Add RAG-augmented query
         gemini_messages.append({"role": "user", "content": rag_prompt})
         
-        # Generate response
         temperature = request.temperature or config.TEMPERATURE
         
         if request.stream:
-            # Streaming response
             async def generate_stream():
                 try:
                     llm_start = time.time()
@@ -612,7 +537,6 @@ async def chat_endpoint(request: ChatRequest):
                     llm_duration = (time.time() - llm_start) * 1000
                     logger.info(f"⏱️  LLM generation (streaming) took {llm_duration:.2f}ms")
                     
-                    # Send sources at the end
                     sources = [
                         {
                             "chunk_id": doc["chunk_id"],
@@ -631,7 +555,6 @@ async def chat_endpoint(request: ChatRequest):
             return StreamingResponse(generate_stream(), media_type="text/event-stream")
         
         else:
-            # Non-streaming response
             llm_start = time.time()
             response = openai_client.chat.completions.create(
                 model=config.GEMINI_MODEL,
@@ -670,4 +593,5 @@ async def chat_endpoint(request: ChatRequest):
 
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=get_env_int("RAG_PORT", 8000))
+    port = int(os.getenv("RAG_PORT", "8000"))
+    uvicorn.run(app, host="0.0.0.0", port=port)
