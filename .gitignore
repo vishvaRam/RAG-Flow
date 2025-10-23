@@ -1,3 +1,6 @@
 .env
 logs
 .devcontainer
+__pycache__
+*.pyc
+.vscode
