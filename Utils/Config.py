@@ -38,7 +38,7 @@ class Config:
     GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
     
     # Google Embeddings via LangChain
-    GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY") or os.getenv("GEMINI_API_KEY")
+    GOOGLE_API_KEY = os.getenv("GEMINI_API_KEY")
     GEMINI_EMBEDDING_MODEL = os.getenv("GEMINI_EMBEDDING_MODEL", "models/gemini-embedding-001")
     EMBEDDING_DIMS = get_env_int("EMBEDDING_DIMS", 768)
     

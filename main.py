@@ -10,6 +10,7 @@ from contextlib import asynccontextmanager
 import uvicorn
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import StreamingResponse
+from fastapi.responses import PlainTextResponse
 from elasticsearch import Elasticsearch
 
 # Langfuse imports
@@ -238,25 +239,44 @@ def build_context(documents: List[Dict[str, Any]]) -> str:
 
 
 def create_rag_prompt(query: str, context: str) -> str:
-    """Create RAG prompt for JEE tutoring"""
+    """Create RAG prompt for JEE tutoring with markdown output"""
     return f"""You are an expert JEE (Joint Entrance Examination) tutor with deep knowledge of Physics, Chemistry, and Mathematics.
 
-Context Information:
-{context}
+        Context Information:
+        {context}
 
-Student Question: {query}
+        Student Question: {query}
 
-Instructions:
-- Answer ONLY based on the context provided
-- If context is insufficient, state "I don't have enough information to answer this accurately"
-- Use step-by-step explanations for problem-solving
-- Include formulas, derivations, and calculations where applicable
-- Use SI units and standard JEE notation
-- Format chemical equations properly
-- Show clear steps: Given → Formula → Substitution → Calculation → Final Answer
-- Keep explanations clear, concise, and exam-oriented
+        Instructions:
+        - Answer ONLY based on the context provided
+        - If context is insufficient, state "I don't have enough information to answer this accurately"
 
-Answer:"""
+        **FORMATTING REQUIREMENTS:**
+        - Output your ENTIRE response in clean, well-formatted Markdown
+        - Use headers (##, ###) to organize sections
+        - Use **bold** for key terms and important concepts
+        - Use bullet points (-) for lists
+        - Use numbered lists (1., 2., 3.) for sequential steps
+        - Use LaTeX math notation wrapped in $ for inline: $F = ma$
+        - Use LaTeX math notation wrapped in $$ for display equations: $$E = mc^2$$
+        - Use code blocks with backticks for chemical formulas if needed
+        - Use > blockquotes for important notes or warnings
+        - Use horizontal rules (---) to separate major sections
+
+        **CONTENT REQUIREMENTS:**
+        - Use step-by-step explanations for problem-solving
+        - Include formulas, derivations, and calculations
+        - Use SI units and standard JEE notation
+        - Show clear steps: **Given** → **Formula** → **Substitution** → **Calculation** → **Final Answer**
+        - Keep explanations clear, concise, and exam-oriented
+
+        **DO NOT:**
+        - Wrap your entire response in a code block or `````` tags
+        - Add meta-commentary about the formatting
+        - Use HTML tags
+
+        Answer in pure markdown format:"""
+
 
 
 # ============================================================================
@@ -497,6 +517,70 @@ async def chat_endpoint(request: ChatRequest):
             }
         }
 
+@app.post("/chat/markdown")
+@observe()
+async def chat_markdown_endpoint(request: ChatRequest):
+    """Chat with RAG - returns clean markdown (no JSON wrapper)"""
+    # Extract query
+    user_messages = [msg for msg in request.messages if msg.role == "user"]
+    if not user_messages:
+        raise HTTPException(status_code=400, detail="No user message found")
+    
+    query = user_messages[-1].content
+    logger.info(f"💬 Chat (Markdown): '{query[:100]}...'")
+    
+    # Get embedding and search
+    query_vector = await get_embedding(query)
+    results = await hybrid_search(
+        query=query,
+        query_vector=query_vector,
+        top_k=config.TOP_K_RETRIEVAL,
+        subject_filter=request.subject_filter,
+        topic_filter=request.topic_filter,
+        alpha=config.HYBRID_ALPHA
+    )
+    
+    # Rerank
+    top_k = request.top_k or config.TOP_K_RERANK
+    reranked = await rerank_documents(query, results, top_k) if results else []
+    
+    # Build prompt
+    context = build_context(reranked)
+    rag_prompt = create_rag_prompt(query, context)
+    
+    messages = [{"role": "system", "content": "You are a helpful educational assistant."}]
+    for msg in request.messages[:-1]:
+        messages.append({"role": msg.role, "content": msg.content})
+    messages.append({"role": "user", "content": rag_prompt})
+    
+    temperature = request.temperature or config.TEMPERATURE
+    
+    # Generate response
+    start = time.time()
+    response = openai_client.chat.completions.create(
+        model=config.GEMINI_MODEL,
+        messages=messages,
+        max_tokens=config.MAX_TOKENS,
+        temperature=temperature
+    )
+    logger.info(f"⏱️  LLM took {(time.time() - start) * 1000:.2f}ms")
+    
+    answer = response.choices[0].message.content
+    logger.info(f"✅ Generated {len(answer)} characters")
+    
+    # Add sources as markdown footer
+    sources_md = "\n\n---\n\n## 📚 Sources\n\n"
+    for i, doc in enumerate(reranked, 1):
+        sources_md += f"{i}. **{doc['subject']}** - {doc['topic']} (Chunk: {doc['chunk_id']})\n"
+    
+    # Return as plain markdown text
+    return PlainTextResponse(
+        content=answer + sources_md,
+        media_type="text/markdown",
+        headers={
+            "Content-Disposition": 'inline; filename="answer.md"'
+        }
+    )
 
 # ============================================================================
 # RUN
