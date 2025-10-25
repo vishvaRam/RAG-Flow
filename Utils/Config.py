@@ -1,7 +1,9 @@
 import os
 from dotenv import load_dotenv
+
 # Load environment variables from .env file
 load_dotenv()
+
 
 # Load environment variables with type conversion
 def get_env_int(key: str, default: int) -> int:
@@ -40,17 +42,17 @@ class Config:
     GEMINI_EMBEDDING_MODEL = os.getenv("GEMINI_EMBEDDING_MODEL", "models/gemini-embedding-001")
     EMBEDDING_DIMS = get_env_int("EMBEDDING_DIMS", 768)
     
-    # Reranker
-    RERANKER_URL = os.getenv("RERANKER_URL", "http://localhost:5656")
+    # Reranker (LangChain CrossEncoder - Local)
+    RERANKER_MODEL = os.getenv("RERANKER_MODEL", "cross-encoder/ms-marco-MiniLM-L-12-v2")
     
     # RAG settings
-    TOP_K_RETRIEVAL = get_env_int("TOP_K_RETRIEVAL", 15)
-    TOP_K_RERANK = get_env_int("TOP_K_RERANK", 5)
+    TOP_K_RETRIEVAL = get_env_int("TOP_K_RETRIEVAL", 12)
+    TOP_K_RERANK = get_env_int("TOP_K_RERANK", 3)
     HYBRID_ALPHA = get_env_float("HYBRID_ALPHA", 0.5)
     
     # API settings
     MAX_TOKENS = get_env_int("MAX_TOKENS", 2048)
-    TEMPERATURE = get_env_float("TEMPERATURE", 0.5)
+    TEMPERATURE = get_env_float("TEMPERATURE", 0.7)
     
     # LangFuse settings
     LANGFUSE_PUBLIC_KEY: str = os.getenv("LANGFUSE_PUBLIC_KEY", "")
