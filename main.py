@@ -15,7 +15,7 @@ from elasticsearch import Elasticsearch
 
 # Langfuse imports
 from langfuse import get_client, observe
-from langfuse.openai import openai
+from langfuse.openai import AsyncOpenAI
 
 # LangChain imports (minimal - only for embeddings and reranking)
 from langchain_google_genai import GoogleGenerativeAIEmbeddings
@@ -49,7 +49,7 @@ logger = logging.getLogger(__name__)
 # Initialize clients
 langfuse = get_client()
 es_client = Elasticsearch([f"http://{config.ELASTICSEARCH_HOST}:{config.ELASTICSEARCH_PORT}"])
-openai_client = openai.OpenAI(
+openai_client = AsyncOpenAI(
     api_key=config.GEMINI_API_KEY,
     base_url="https://generativelanguage.googleapis.com/v1beta/openai/"
 )
@@ -91,6 +91,63 @@ def log_time(operation_name: str):
 # ============================================================================
 # CORE RAG FUNCTIONS
 # ============================================================================
+# At the top with other imports
+from langfuse.openai import AsyncOpenAI  # ✅ Use AsyncOpenAI
+
+# Initialize async client
+openai_client = AsyncOpenAI(
+    api_key=config.GEMINI_API_KEY,
+    base_url="https://generativelanguage.googleapis.com/v1beta/openai/"
+)
+
+@observe()
+@log_time("Query rewriting")
+async def rewrite_query(original_query: str, subject_filter: Optional[str] = None) -> str:
+    """Rewrite user query for better retrieval"""
+    
+    # Simpler, less restrictive prompt
+    rewrite_prompt = f"""Improve this search query by adding technical terms: "{original_query}"
+Subject: {subject_filter or "Science"}
+Output only the improved query."""
+
+    try:
+        # Use await with AsyncOpenAI
+        response = await openai_client.chat.completions.create(
+            model="gemini-2.0-flash",  # Use a faster model
+            messages=[
+                {"role": "user", "content": rewrite_prompt}  # Remove system message
+            ],
+            max_tokens=512,  # Reduce tokens
+            temperature=0.2
+        )
+        
+        # Debug logging
+        logger.info(f"Raw response: {response}")
+        
+        # Check if response was blocked
+        if not response.choices:
+            logger.warning("No choices in response")
+            return original_query
+            
+        content = response.choices[0].message.content
+        
+        # Check finish_reason
+        finish_reason = response.choices[0].finish_reason
+        if finish_reason and finish_reason != "stop":
+            logger.warning(f"Unusual finish_reason: {finish_reason}")
+        
+        if content and content.strip():
+            rewritten = content.strip().strip('"').strip("'")
+            logger.info(f"📝 Rewritten: '{original_query[:50]}' → '{rewritten[:50]}'")
+            return rewritten
+        else:
+            logger.warning(f"Empty content. Finish reason: {finish_reason}")
+            return original_query
+        
+    except Exception as e:
+        logger.error(f"Query rewriting failed: {e}", exc_info=True)
+        return original_query
+
 
 @observe()
 @log_time("Embedding generation")
@@ -240,43 +297,23 @@ def build_context(documents: List[Dict[str, Any]]) -> str:
 
 def create_rag_prompt(query: str, context: str) -> str:
     """Create RAG prompt for JEE tutoring with markdown output"""
-    return f"""You are an expert JEE (Joint Entrance Examination) tutor with deep knowledge of Physics, Chemistry, and Mathematics.
+    return f"""You are a JEE tutor. Answer using ONLY the context provided.
 
-        Context Information:
+        Context:
         {context}
 
-        Student Question: {query}
+        Question: {query}
 
-        Instructions:
-        - Answer ONLY based on the context provided
-        - If context is insufficient, state "I don't have enough information to answer this accurately"
+        Format your answer in markdown:
+        - Use ## headers for sections
+        - Use **bold** for key terms
+        - Use $ for inline math (e.g., $F=ma$) and $$ for display equations
+        - Show step-by-step: **Given** → **Formula** → **Solution** → **Answer**
+        - Use SI units and JEE notation
 
-        **FORMATTING REQUIREMENTS:**
-        - Output your ENTIRE response in clean, well-formatted Markdown
-        - Use headers (##, ###) to organize sections
-        - Use **bold** for key terms and important concepts
-        - Use bullet points (-) for lists
-        - Use numbered lists (1., 2., 3.) for sequential steps
-        - Use LaTeX math notation wrapped in $ for inline: $F = ma$
-        - Use LaTeX math notation wrapped in $$ for display equations: $$E = mc^2$$
-        - Use code blocks with backticks for chemical formulas if needed
-        - Use > blockquotes for important notes or warnings
-        - Use horizontal rules (---) to separate major sections
+        If context is insufficient, say "I don't have enough information to answer this."
 
-        **CONTENT REQUIREMENTS:**
-        - Use step-by-step explanations for problem-solving
-        - Include formulas, derivations, and calculations
-        - Use SI units and standard JEE notation
-        - Show clear steps: **Given** → **Formula** → **Substitution** → **Calculation** → **Final Answer**
-        - Keep explanations clear, concise, and exam-oriented
-
-        **DO NOT:**
-        - Wrap your entire response in a code block or `````` tags
-        - Add meta-commentary about the formatting
-        - Use HTML tags
-
-        Answer in pure markdown format:"""
-
+        Answer:"""
 
 
 # ============================================================================
@@ -296,7 +333,7 @@ async def lifespan(app: FastAPI):
     # Validate connections
     try:
         if langfuse.auth_check():
-            logger.info(f"✓ Langfuse connected")
+            logger.info("✓ Langfuse connected")
     except Exception as e:
         logger.warning(f"⚠ Langfuse unavailable: {e}")
     
@@ -382,13 +419,15 @@ async def health_check():
 async def search_endpoint(request: SearchRequest):
     """Search documents"""
     logger.info(f"🔍 Search: '{request.query}' (top_k={request.top_k})")
-    
+
+    rewritten_query = await rewrite_query(request.query, request.subject_filter)
+
     # Get embedding
-    query_vector = await get_embedding(request.query)
-    
+    query_vector = await get_embedding(rewritten_query)
+
     # Hybrid search
     results = await hybrid_search(
-        query=request.query,
+        query=rewritten_query,
         query_vector=query_vector,
         top_k=config.TOP_K_RETRIEVAL,
         subject_filter=request.subject_filter,
@@ -415,6 +454,22 @@ async def search_endpoint(request: SearchRequest):
     logger.info(f"✅ Returned {len(search_results)} results")
     return SearchResponse(query=request.query, results=search_results, total_found=len(results))
 
+messages = [
+        {
+            "role": "system", 
+            "content": """
+                You are a JEE examination tutor with expertise in Physics, Chemistry, and Mathematics. 
+                    Your role is to:
+                        - Explain concepts clearly with proper scientific reasoning
+                        - Break down complex problems into manageable steps
+                        - Use LaTeX notation for all mathematical expressions
+                        - Connect theory to JEE exam patterns and real-world applications
+                        - Maintain an encouraging, patient tone that builds student confidence
+                        - Focus on conceptual understanding over rote memorization
+                    """
+        }
+    ]
+
 
 @app.post("/chat")
 @observe()
@@ -428,10 +483,12 @@ async def chat_endpoint(request: ChatRequest):
     query = user_messages[-1].content
     logger.info(f"💬 Chat: '{query[:100]}...'")
     
+    rewritten_query = await rewrite_query(query, request.subject_filter)
+
     # Get embedding and search
-    query_vector = await get_embedding(query)
+    query_vector = await get_embedding(rewritten_query)
     results = await hybrid_search(
-        query=query,
+        query=rewritten_query,
         query_vector=query_vector,
         top_k=config.TOP_K_RETRIEVAL,
         subject_filter=request.subject_filter,
@@ -447,7 +504,7 @@ async def chat_endpoint(request: ChatRequest):
     context = build_context(reranked)
     rag_prompt = create_rag_prompt(query, context)
     
-    messages = [{"role": "system", "content": "You are a helpful educational assistant."}]
+    global messages
     for msg in request.messages[:-1]:
         messages.append({"role": msg.role, "content": msg.content})
     messages.append({"role": "user", "content": rag_prompt})
@@ -459,7 +516,7 @@ async def chat_endpoint(request: ChatRequest):
         async def generate_stream():
             try:
                 start = time.time()
-                stream = openai_client.chat.completions.create(
+                stream = await openai_client.chat.completions.create(
                     model=config.GEMINI_MODEL,
                     messages=messages,
                     max_tokens=config.MAX_TOKENS,
@@ -469,7 +526,8 @@ async def chat_endpoint(request: ChatRequest):
                 
                 for chunk in stream:
                     if chunk.choices[0].delta.content:
-                        yield f"data: {json.dumps({'content': chunk.choices[0].delta.content})}\n\n"
+                        yield json.dumps({'content': chunk.choices[0].delta.content})
+                        await asyncio.sleep(0)  # ✅ Critical for streaming
                 
                 logger.info(f"⏱️  Streaming took {(time.time() - start) * 1000:.2f}ms")
                 
@@ -477,18 +535,26 @@ async def chat_endpoint(request: ChatRequest):
                     {"chunk_id": doc["chunk_id"], "subject": doc["subject"], "topic": doc["topic"]}
                     for doc in reranked
                 ]
-                yield f"data: {json.dumps({'sources': sources})}\n\n"
-                yield "data: [DONE]\n\n"
+                yield json.dumps({'sources': sources})
+                yield json.dumps({'done': True})
             except Exception as e:
                 logger.error(f"Streaming error: {e}")
-                yield f"data: {json.dumps({'error': str(e)})}\n\n"
-        
-        return StreamingResponse(generate_stream(), media_type="text/event-stream")
+                yield json.dumps({'error': str(e)})
+
+        return StreamingResponse(
+            generate_stream(), 
+            media_type="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache",
+                "X-Accel-Buffering": "no",
+                "Connection": "keep-alive"
+            }
+        )
     
-    # Non-streaming response
+    # Non-streaming response (unchanged)
     else:
         start = time.time()
-        response = openai_client.chat.completions.create(
+        response = await openai_client.chat.completions.create(
             model=config.GEMINI_MODEL,
             messages=messages,
             max_tokens=config.MAX_TOKENS,
@@ -516,6 +582,7 @@ async def chat_endpoint(request: ChatRequest):
                 "total_tokens": response.usage.total_tokens
             }
         }
+
 
 @app.post("/chat/markdown")
 @observe()
@@ -547,8 +614,8 @@ async def chat_markdown_endpoint(request: ChatRequest):
     # Build prompt
     context = build_context(reranked)
     rag_prompt = create_rag_prompt(query, context)
-    
-    messages = [{"role": "system", "content": "You are a helpful educational assistant."}]
+
+    global messages
     for msg in request.messages[:-1]:
         messages.append({"role": msg.role, "content": msg.content})
     messages.append({"role": "user", "content": rag_prompt})
