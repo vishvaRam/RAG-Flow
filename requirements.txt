@@ -1,12 +1,35 @@
+# PyTorch CPU-only (for sentence-transformers)
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch
+torchvision
+
+# Core ML
+sentence-transformers
+
+# Web Framework
 fastapi
 uvicorn[standard]
 gunicorn
-openai
-elasticsearch
-pydantic
-python-dotenv
 httpx
+
+# Utilities
 tenacity
-uv
+pydantic
+pydantic-settings
+python-dotenv
+
+# AI Services
+openai
+
+# Search
+elasticsearch
+
+# LangChain
+langchain-core<1.0.0
+langchain-text-splitters<1.0.0
+langchain<1.0.0
+langchain-community
 langchain-google-genai
+
+# Observability
 langfuse
