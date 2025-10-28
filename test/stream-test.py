@@ -8,6 +8,8 @@ payload = {
     "temperature": 0.01
 }
 
+print("🚀 Starting stream...\n")
+
 with requests.post(url, json=payload, stream=True) as r:
     buffer = ""
     for chunk in r.iter_content(chunk_size=None, decode_unicode=True):
@@ -24,16 +26,27 @@ with requests.post(url, json=payload, stream=True) as r:
                     # Handle different message types
                     if 'content' in obj:
                         print(obj['content'], end='', flush=True)
+                    
                     elif 'sources' in obj:
                         print("\n\n📚 Sources:")
                         for src in obj['sources']:
                             print(f"  - {src['subject']} > {src['topic']} ({src['chunk_id']})")
+                    
+                    elif 'usage' in obj:  # ✅ NEW: Handle token usage
+                        usage = obj['usage']
+                        print("\n\n📊 Token Usage:")
+                        print(f"  - Prompt tokens: {usage['prompt_tokens']}")
+                        print(f"  - Completion tokens: {usage['completion_tokens']}")
+                        print(f"  - Total tokens: {usage['total_tokens']}")
+                    
                     elif 'done' in obj:
-                        print("\n✅ Stream complete")
+                        print("\n\n✅ Stream complete")
                         break
+                    
                     elif 'error' in obj:
-                        print(f"\n❌ Error: {obj['error']}")
+                        print(f"\n\n❌ Error: {obj['error']}")
                         break
+                
                 except json.JSONDecodeError:
                     # Incomplete JSON, wait for more data
                     break

@@ -9,15 +9,14 @@ from contextlib import asynccontextmanager
 
 import uvicorn
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import StreamingResponse
-from fastapi.responses import PlainTextResponse
+from fastapi.responses import StreamingResponse, PlainTextResponse
 from elasticsearch import Elasticsearch
 
 # Langfuse imports
 from langfuse import get_client, observe
 from langfuse.openai import AsyncOpenAI
 
-# LangChain imports (minimal - only for embeddings and reranking)
+# LangChain imports
 from langchain_google_genai import GoogleGenerativeAIEmbeddings
 from langchain.retrievers.document_compressors import CrossEncoderReranker
 from langchain_community.cross_encoders import HuggingFaceCrossEncoder
@@ -27,15 +26,12 @@ from langchain_core.documents import Document
 from Utils.Config import config
 from Utils.models import ChatRequest, SearchRequest, SearchResponse, SearchResult
 
-
 # ============================================================================
 # SETUP & INITIALIZATION
 # ============================================================================
 
-# Create logs directory
 os.makedirs('logs', exist_ok=True)
 
-# Configure logging
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
@@ -48,24 +44,36 @@ logger = logging.getLogger(__name__)
 
 # Initialize clients
 langfuse = get_client()
-es_client = Elasticsearch([f"http://{config.ELASTICSEARCH_HOST}:{config.ELASTICSEARCH_PORT}"])
+es_client = Elasticsearch(
+    [f"http://{config.ELASTICSEARCH_HOST}:{config.ELASTICSEARCH_PORT}"],
+    max_retries=3,
+    retry_on_timeout=True,
+    maxsize=25,
+    request_timeout=30
+)
+
 openai_client = AsyncOpenAI(
     api_key=config.GEMINI_API_KEY,
-    base_url="https://generativelanguage.googleapis.com/v1beta/openai/"
+    base_url="https://generativelanguage.googleapis.com/v1beta/openai/",
+    timeout=20.0,
+    max_retries=1
 )
 
 # Initialize embeddings model
 embeddings_model = GoogleGenerativeAIEmbeddings(
     model=config.GEMINI_EMBEDDING_MODEL,
-    google_api_key=config.GOOGLE_API_KEY,
+    google_api_key=config.GOOGLE_API_KEY, # type: ignore
 )
 
-# Initialize reranker (load once at startup)
+# Initialize reranker
 logger.info(f"Loading reranker: {config.RERANKER_MODEL}")
 cross_encoder = HuggingFaceCrossEncoder(model_name=config.RERANKER_MODEL)
 reranker = CrossEncoderReranker(model=cross_encoder, top_n=config.TOP_K_RERANK)
 logger.info("✓ Reranker loaded")
 
+# Query rewriting configuration
+ENABLE_QUERY_REWRITING = config.ENABLE_QUERY_REWRITING
+QUERY_REWRITE_TIMEOUT = config.QUERY_REWRITE_TIMEOUT
 
 # ============================================================================
 # UTILITIES
@@ -87,81 +95,70 @@ def log_time(operation_name: str):
         return wrapper
     return decorator
 
-
 # ============================================================================
-# CORE RAG FUNCTIONS
+# CORE RAG FUNCTIONS - PLAIN ASYNC/AWAIT (NO SEMAPHORES)
 # ============================================================================
-# At the top with other imports
-from langfuse.openai import AsyncOpenAI  # ✅ Use AsyncOpenAI
-
-# Initialize async client
-openai_client = AsyncOpenAI(
-    api_key=config.GEMINI_API_KEY,
-    base_url="https://generativelanguage.googleapis.com/v1beta/openai/"
-)
 
 @observe()
 @log_time("Query rewriting")
-async def rewrite_query(original_query: str, subject_filter: Optional[str] = None) -> str:
-    """Rewrite user query for better retrieval"""
+async def rewrite_query(original_query: str, subject_filter: Optional[str] = None, enable: bool = True) -> str:
+    """Rewrite user query for better retrieval (optional)"""
     
-    # Simpler, less restrictive prompt
-    rewrite_prompt = f"""Improve this search query by adding technical terms: "{original_query}"
-Subject: {subject_filter or "Science"}
-Output only the improved query."""
+    if not enable or len(original_query.split()) < 3:
+        logger.info("📝 Skipping query rewriting")
+        return original_query
+    
+    rewrite_prompt = f"""Add technical terms to: "{original_query}"
+        Subject: {subject_filter or "Physics/Chemistry/Mathematics"}
+        Output ONLY the improved Hybrid RAG query."""
 
     try:
-        # Use await with AsyncOpenAI
-        response = await openai_client.chat.completions.create(
-            model="gemini-2.0-flash",  # Use a faster model
-            messages=[
-                {"role": "user", "content": rewrite_prompt}  # Remove system message
-            ],
-            max_tokens=512,  # Reduce tokens
-            temperature=0.2
-        )
+        async with asyncio.timeout(QUERY_REWRITE_TIMEOUT):
+            response = await openai_client.chat.completions.create(
+                reasoning_effort="none", # type: ignore
+                model=config.QUERY_REWRITE_MODEL,
+                messages=[{"role": "user", "content": rewrite_prompt}],
+                max_tokens=config.QUERY_REWRITE_MAX_TOKENS,
+                temperature=0.1
+            )
         
-        # Debug logging
-        logger.info(f"Raw response: {response}")
-        
-        # Check if response was blocked
         if not response.choices:
             logger.warning("No choices in response")
             return original_query
             
         content = response.choices[0].message.content
         
-        # Check finish_reason
-        finish_reason = response.choices[0].finish_reason
-        if finish_reason and finish_reason != "stop":
-            logger.warning(f"Unusual finish_reason: {finish_reason}")
-        
         if content and content.strip():
             rewritten = content.strip().strip('"').strip("'")
-            logger.info(f"📝 Rewritten: '{original_query[:50]}' → '{rewritten[:50]}'")
+            logger.info(f"📝 Rewritten: '{original_query[:40]}' → '{rewritten[:40]}'")
             return rewritten
         else:
-            logger.warning(f"Empty content. Finish reason: {finish_reason}")
             return original_query
         
-    except Exception as e:
-        logger.error(f"Query rewriting failed: {e}", exc_info=True)
+    except asyncio.TimeoutError:
+        logger.warning(f"Query rewriting timeout after {QUERY_REWRITE_TIMEOUT}s")
         return original_query
-
+    except Exception as e:
+        logger.error(f"Query rewriting failed: {e}")
+        return original_query
 
 @observe()
 @log_time("Embedding generation")
 async def get_embedding(text: str) -> List[float]:
-    """Generate query embedding"""
-    embedding = await asyncio.to_thread(
-        embeddings_model.embed_query,
-        text,
-        output_dimensionality=config.EMBEDDING_DIMS,
-        task_type="retrieval_query"
-    )
-    logger.info(f"📊 Generated {len(embedding)}-dimensional embedding")
-    return embedding
-
+    """Generate query embedding - plain async"""
+    try:
+        # ✅ Just await - no semaphore
+        embedding = await asyncio.to_thread(
+            embeddings_model.embed_query,
+            text,
+            output_dimensionality=config.EMBEDDING_DIMS,
+            task_type="retrieval_query"
+        )
+        logger.info(f"📊 Generated {len(embedding)}-dimensional embedding")
+        return embedding
+    except Exception as e:
+        logger.error(f"Embedding generation failed: {e}", exc_info=True)
+        raise
 
 @observe()
 @log_time("Hybrid search")
@@ -173,22 +170,19 @@ async def hybrid_search(
     topic_filter: Optional[str] = None,
     alpha: float = 0.5
 ) -> List[Dict[str, Any]]:
-    """Perform hybrid search (BM25 + vector search)"""
+    """Perform hybrid search - plain async"""
     
-    # Build filters
     filters = []
     if subject_filter:
         filters.append({"term": {"subject": subject_filter}})
     if topic_filter:
         filters.append({"term": {"topic": topic_filter}})
     
-    # Hybrid search query
     search_body = {
         "size": top_k,
         "query": {
             "bool": {
                 "should": [
-                    # BM25 keyword search
                     {
                         "match": {
                             "text": {
@@ -197,7 +191,6 @@ async def hybrid_search(
                             }
                         }
                     },
-                    # Vector similarity search
                     {
                         "script_score": {
                             "query": {"match_all": {}} if not filters else {"bool": {"filter": filters}},
@@ -216,70 +209,75 @@ async def hybrid_search(
         "_source": ["text", "subject", "topic", "file_path", "chunk_id"]
     }
     
-    response = await asyncio.to_thread(es_client.search, index=config.INDEX_NAME, body=search_body)
-    
-    results = [
-        {
-            "text": hit['_source']['text'],
-            "score": hit['_score'],
-            "subject": hit['_source']['subject'],
-            "topic": hit['_source']['topic'],
-            "file_path": hit['_source']['file_path'],
-            "chunk_id": hit['_source']['chunk_id']
-        }
-        for hit in response['hits']['hits']
-    ]
-    
-    logger.info(f"📊 Retrieved {len(results)} documents")
-    return results
-
+    try:
+        # ✅ Just await - no semaphore
+        response = await asyncio.to_thread(es_client.search, index=config.INDEX_NAME, body=search_body)
+        
+        results = [
+            {
+                "text": hit['_source']['text'],
+                "score": hit['_score'],
+                "subject": hit['_source']['subject'],
+                "topic": hit['_source']['topic'],
+                "file_path": hit['_source']['file_path'],
+                "chunk_id": hit['_source']['chunk_id']
+            }
+            for hit in response['hits']['hits']
+        ]
+        
+        logger.info(f"📊 Retrieved {len(results)} documents")
+        return results
+    except Exception as e:
+        logger.error(f"Hybrid search failed: {e}", exc_info=True)
+        raise
 
 @observe()
 @log_time("Reranking")
 async def rerank_documents(query: str, documents: List[Dict[str, Any]], top_k: int = 5) -> List[Dict[str, Any]]:
-    """Rerank documents using CrossEncoder"""
+    """Rerank documents - plain async"""
     if not documents:
         return []
     
-    # Convert to LangChain Document format
-    langchain_docs = [
-        Document(
-            page_content=doc["text"],
-            metadata={
-                "subject": doc["subject"],
-                "topic": doc["topic"],
-                "file_path": doc["file_path"],
-                "chunk_id": doc["chunk_id"],
-                "original_score": doc["score"]
-            }
+    try:
+        langchain_docs = [
+            Document(
+                page_content=doc["text"],
+                metadata={
+                    "subject": doc["subject"],
+                    "topic": doc["topic"],
+                    "file_path": doc["file_path"],
+                    "chunk_id": doc["chunk_id"],
+                    "original_score": doc["score"]
+                }
+            )
+            for doc in documents
+        ]
+        
+        # ✅ Just await - no semaphore
+        reranked_docs = await asyncio.to_thread(
+            reranker.compress_documents,
+            documents=langchain_docs,
+            query=query
         )
-        for doc in documents
-    ]
-    
-    # Rerank
-    reranked_docs = await asyncio.to_thread(
-        reranker.compress_documents,
-        documents=langchain_docs,
-        query=query
-    )
-    
-    # Convert back to dict format
-    results = [
-        {
-            "text": doc.page_content,
-            "score": doc.metadata.get("original_score", 0.0),
-            "rerank_score": doc.metadata.get("relevance_score", 0.0),
-            "subject": doc.metadata.get("subject", ""),
-            "topic": doc.metadata.get("topic", ""),
-            "file_path": doc.metadata.get("file_path", ""),
-            "chunk_id": doc.metadata.get("chunk_id", "")
-        }
-        for doc in reranked_docs[:top_k]
-    ]
-    
-    logger.info(f"📊 Reranked to top {len(results)} documents")
-    return results
-
+        
+        results = [
+            {
+                "text": doc.page_content,
+                "score": doc.metadata.get("original_score", 0.0),
+                "rerank_score": doc.metadata.get("relevance_score", 0.0),
+                "subject": doc.metadata.get("subject", ""),
+                "topic": doc.metadata.get("topic", ""),
+                "file_path": doc.metadata.get("file_path", ""),
+                "chunk_id": doc.metadata.get("chunk_id", "")
+            }
+            for doc in reranked_docs[:top_k]
+        ]
+        
+        logger.info(f"📊 Reranked to top {len(results)} documents")
+        return results
+    except Exception as e:
+        logger.error(f"Reranking failed: {e}", exc_info=True)
+        return documents[:top_k]
 
 def build_context(documents: List[Dict[str, Any]]) -> str:
     """Build context string from documents"""
@@ -294,9 +292,8 @@ def build_context(documents: List[Dict[str, Any]]) -> str:
         for i, doc in enumerate(documents, 1)
     ])
 
-
 def create_rag_prompt(query: str, context: str) -> str:
-    """Create RAG prompt for JEE tutoring with markdown output"""
+    """Create RAG prompt for JEE tutoring"""
     return f"""You are a JEE tutor. Answer using ONLY the context provided.
 
         Context:
@@ -315,6 +312,18 @@ def create_rag_prompt(query: str, context: str) -> str:
 
         Answer:"""
 
+SYSTEM_MESSAGE = {
+    "role": "system", 
+    "content": """You are a JEE examination tutor with expertise in Physics, Chemistry, and Mathematics. 
+        Your role is to:
+            - Explain concepts clearly with proper scientific reasoning
+            - Break down complex problems into manageable steps
+            - Use LaTeX notation for all mathematical expressions
+            - Connect theory to JEE exam patterns and real-world applications
+            - Maintain an encouraging, patient tone that builds student confidence
+            - Focus on conceptual understanding over rote memorization
+        """
+}
 
 # ============================================================================
 # FASTAPI APP
@@ -323,14 +332,13 @@ def create_rag_prompt(query: str, context: str) -> str:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Startup and shutdown events"""
-    # Startup
     logger.info("Starting RAG API service...")
     logger.info(f"  - Elasticsearch: {config.ELASTICSEARCH_HOST}:{config.ELASTICSEARCH_PORT}")
     logger.info(f"  - Index: {config.INDEX_NAME}")
     logger.info(f"  - Model: {config.GEMINI_MODEL}")
     logger.info(f"  - Reranker: {config.RERANKER_MODEL}")
+    logger.info(f"  - Query rewriting: {'ENABLED' if ENABLE_QUERY_REWRITING else 'DISABLED'}")
     
-    # Validate connections
     try:
         if langfuse.auth_check():
             logger.info("✓ Langfuse connected")
@@ -348,11 +356,9 @@ async def lifespan(app: FastAPI):
     logger.info("✓ Service started")
     yield
     
-    # Shutdown
     langfuse.flush()
     es_client.close()
     logger.info("✓ Service stopped")
-
 
 app = FastAPI(
     title="Hybrid RAG API",
@@ -360,7 +366,6 @@ app = FastAPI(
     version="2.0.0",
     lifespan=lifespan
 )
-
 
 @app.middleware("http")
 async def log_requests(request: Request, call_next):
@@ -372,7 +377,6 @@ async def log_requests(request: Request, call_next):
     logger.info(f"🟢 {request.method} {request.url.path} - {response.status_code} - {duration:.2f}ms")
     response.headers["X-Process-Time"] = f"{duration:.2f}ms"
     return response
-
 
 # ============================================================================
 # API ENDPOINTS
@@ -387,6 +391,12 @@ async def root():
         "model": config.GEMINI_MODEL,
         "embedding_model": config.GEMINI_EMBEDDING_MODEL,
         "reranker": config.RERANKER_MODEL,
+        "concurrency": "plain async/await (no artificial limits)",
+        "optimizations": {
+            "query_rewriting": "disabled" if not ENABLE_QUERY_REWRITING else "enabled",
+            "api_timeout": "20s",
+            "max_retries": 2
+        },
         "endpoints": {
             "/chat": "Chat with RAG",
             "/search": "Search documents",
@@ -394,7 +404,6 @@ async def root():
             "/docs": "API documentation"
         }
     }
-
 
 @app.get("/health")
 async def health_check():
@@ -413,19 +422,20 @@ async def health_check():
         "langfuse": "enabled" if config.LANGFUSE_PUBLIC_KEY else "disabled"
     }
 
-
 @app.post("/search", response_model=SearchResponse)
 @observe()
 async def search_endpoint(request: SearchRequest):
     """Search documents"""
     logger.info(f"🔍 Search: '{request.query}' (top_k={request.top_k})")
 
-    rewritten_query = await rewrite_query(request.query, request.subject_filter)
+    rewritten_query = await rewrite_query(
+        request.query, 
+        request.subject_filter,
+        enable=ENABLE_QUERY_REWRITING
+    )
 
-    # Get embedding
     query_vector = await get_embedding(rewritten_query)
 
-    # Hybrid search
     results = await hybrid_search(
         query=rewritten_query,
         query_vector=query_vector,
@@ -435,10 +445,8 @@ async def search_endpoint(request: SearchRequest):
         alpha=config.HYBRID_ALPHA
     )
     
-    # Rerank
     reranked = await rerank_documents(request.query, results, request.top_k) if results else []
     
-    # Format response
     search_results = [
         SearchResult(
             text=doc["text"][:500] + "..." if len(doc["text"]) > 500 else doc["text"],
@@ -454,28 +462,10 @@ async def search_endpoint(request: SearchRequest):
     logger.info(f"✅ Returned {len(search_results)} results")
     return SearchResponse(query=request.query, results=search_results, total_found=len(results))
 
-messages = [
-        {
-            "role": "system", 
-            "content": """
-                You are a JEE examination tutor with expertise in Physics, Chemistry, and Mathematics. 
-                    Your role is to:
-                        - Explain concepts clearly with proper scientific reasoning
-                        - Break down complex problems into manageable steps
-                        - Use LaTeX notation for all mathematical expressions
-                        - Connect theory to JEE exam patterns and real-world applications
-                        - Maintain an encouraging, patient tone that builds student confidence
-                        - Focus on conceptual understanding over rote memorization
-                    """
-        }
-    ]
-
-
 @app.post("/chat")
 @observe()
 async def chat_endpoint(request: ChatRequest):
     """Chat with RAG"""
-    # Extract query
     user_messages = [msg for msg in request.messages if msg.role == "user"]
     if not user_messages:
         raise HTTPException(status_code=400, detail="No user message found")
@@ -483,9 +473,12 @@ async def chat_endpoint(request: ChatRequest):
     query = user_messages[-1].content
     logger.info(f"💬 Chat: '{query[:100]}...'")
     
-    rewritten_query = await rewrite_query(query, request.subject_filter)
+    rewritten_query = await rewrite_query(
+        query, 
+        request.subject_filter,
+        enable=ENABLE_QUERY_REWRITING
+    )
 
-    # Get embedding and search
     query_vector = await get_embedding(rewritten_query)
     results = await hybrid_search(
         query=rewritten_query,
@@ -496,38 +489,41 @@ async def chat_endpoint(request: ChatRequest):
         alpha=config.HYBRID_ALPHA
     )
     
-    # Rerank
     top_k = request.top_k or config.TOP_K_RERANK
     reranked = await rerank_documents(query, results, top_k) if results else []
     
-    # Build prompt
     context = build_context(reranked)
     rag_prompt = create_rag_prompt(query, context)
     
-    global messages
+    conversation_messages = [SYSTEM_MESSAGE]
     for msg in request.messages[:-1]:
-        messages.append({"role": msg.role, "content": msg.content})
-    messages.append({"role": "user", "content": rag_prompt})
+        conversation_messages.append({"role": msg.role, "content": msg.content})
+    conversation_messages.append({"role": "user", "content": rag_prompt})
     
     temperature = request.temperature or config.TEMPERATURE
     
-    # Streaming response
     if request.stream:
         async def generate_stream():
             try:
                 start = time.time()
                 stream = await openai_client.chat.completions.create(
                     model=config.GEMINI_MODEL,
-                    messages=messages,
+                    reasoning_effort="none", # type: ignore
+                    messages=conversation_messages, # type: ignore
                     max_tokens=config.MAX_TOKENS,
                     temperature=temperature,
-                    stream=True
+                    stream=True,
+                    stream_options={"include_usage": True}
                 )
                 
-                for chunk in stream:
+                usage_data = None
+                
+                async for chunk in stream:
+                    if chunk.usage:
+                        usage_data = chunk.usage
                     if chunk.choices[0].delta.content:
-                        yield json.dumps({'content': chunk.choices[0].delta.content})
-                        await asyncio.sleep(0)  # ✅ Critical for streaming
+                        yield json.dumps({'content': chunk.choices[0].delta.content}) + '\n'
+                        await asyncio.sleep(0)
                 
                 logger.info(f"⏱️  Streaming took {(time.time() - start) * 1000:.2f}ms")
                 
@@ -535,11 +531,22 @@ async def chat_endpoint(request: ChatRequest):
                     {"chunk_id": doc["chunk_id"], "subject": doc["subject"], "topic": doc["topic"]}
                     for doc in reranked
                 ]
-                yield json.dumps({'sources': sources})
-                yield json.dumps({'done': True})
+                yield json.dumps({'sources': sources}) + '\n'
+                # ✅ Send token usage (if available)
+                if usage_data:
+                    yield json.dumps({
+                        'usage': {
+                            'prompt_tokens': usage_data.prompt_tokens,
+                            'completion_tokens': usage_data.completion_tokens,
+                            'total_tokens': usage_data.total_tokens
+                        }
+                    }) + '\n'
+                    logger.info(f"📊 Token usage: {usage_data.total_tokens} total tokens")
+                
+                yield json.dumps({'done': True}) + '\n'
             except Exception as e:
-                logger.error(f"Streaming error: {e}")
-                yield json.dumps({'error': str(e)})
+                logger.error(f"Streaming error: {e}", exc_info=True)
+                yield json.dumps({'error': str(e)}) + '\n'
 
         return StreamingResponse(
             generate_stream(), 
@@ -551,19 +558,22 @@ async def chat_endpoint(request: ChatRequest):
             }
         )
     
-    # Non-streaming response (unchanged)
     else:
         start = time.time()
+        
+        # ✅ Plain async call - no semaphore
         response = await openai_client.chat.completions.create(
             model=config.GEMINI_MODEL,
-            messages=messages,
+            reasoning_effort="none", # type: ignore
+            messages=conversation_messages, # type: ignore
             max_tokens=config.MAX_TOKENS,
             temperature=temperature
         )
+        
         logger.info(f"⏱️  LLM took {(time.time() - start) * 1000:.2f}ms")
         
         answer = response.choices[0].message.content
-        logger.info(f"✅ Generated {len(answer)} characters")
+        logger.info(f"✅ Generated {len(answer)} characters") # type: ignore
         
         return {
             "answer": answer,
@@ -577,18 +587,16 @@ async def chat_endpoint(request: ChatRequest):
                 for doc in reranked
             ],
             "usage": {
-                "prompt_tokens": response.usage.prompt_tokens,
-                "completion_tokens": response.usage.completion_tokens,
-                "total_tokens": response.usage.total_tokens
+                "prompt_tokens": response.usage.prompt_tokens, # type: ignore
+                "completion_tokens": response.usage.completion_tokens, # type: ignore
+                "total_tokens": response.usage.total_tokens # type: ignore
             }
         }
-
 
 @app.post("/chat/markdown")
 @observe()
 async def chat_markdown_endpoint(request: ChatRequest):
-    """Chat with RAG - returns clean markdown (no JSON wrapper)"""
-    # Extract query
+    """Chat with RAG - returns clean markdown"""
     user_messages = [msg for msg in request.messages if msg.role == "user"]
     if not user_messages:
         raise HTTPException(status_code=400, detail="No user message found")
@@ -596,7 +604,6 @@ async def chat_markdown_endpoint(request: ChatRequest):
     query = user_messages[-1].content
     logger.info(f"💬 Chat (Markdown): '{query[:100]}...'")
     
-    # Get embedding and search
     query_vector = await get_embedding(query)
     results = await hybrid_search(
         query=query,
@@ -607,42 +614,39 @@ async def chat_markdown_endpoint(request: ChatRequest):
         alpha=config.HYBRID_ALPHA
     )
     
-    # Rerank
     top_k = request.top_k or config.TOP_K_RERANK
     reranked = await rerank_documents(query, results, top_k) if results else []
     
-    # Build prompt
     context = build_context(reranked)
     rag_prompt = create_rag_prompt(query, context)
 
-    global messages
+    conversation_messages = [SYSTEM_MESSAGE]
     for msg in request.messages[:-1]:
-        messages.append({"role": msg.role, "content": msg.content})
-    messages.append({"role": "user", "content": rag_prompt})
+        conversation_messages.append({"role": msg.role, "content": msg.content})
+    conversation_messages.append({"role": "user", "content": rag_prompt})
     
     temperature = request.temperature or config.TEMPERATURE
     
-    # Generate response
     start = time.time()
-    response = openai_client.chat.completions.create(
+    
+    response = await openai_client.chat.completions.create(
         model=config.GEMINI_MODEL,
-        messages=messages,
+        messages=conversation_messages, # type: ignore
         max_tokens=config.MAX_TOKENS,
         temperature=temperature
     )
+    
     logger.info(f"⏱️  LLM took {(time.time() - start) * 1000:.2f}ms")
     
     answer = response.choices[0].message.content
-    logger.info(f"✅ Generated {len(answer)} characters")
+    logger.info(f"✅ Generated {len(answer)} characters") # type: ignore
     
-    # Add sources as markdown footer
     sources_md = "\n\n---\n\n## 📚 Sources\n\n"
     for i, doc in enumerate(reranked, 1):
         sources_md += f"{i}. **{doc['subject']}** - {doc['topic']} (Chunk: {doc['chunk_id']})\n"
     
-    # Return as plain markdown text
     return PlainTextResponse(
-        content=answer + sources_md,
+        content=answer + sources_md, # type: ignore
         media_type="text/markdown",
         headers={
             "Content-Disposition": 'inline; filename="answer.md"'
@@ -655,4 +659,10 @@ async def chat_markdown_endpoint(request: ChatRequest):
 
 if __name__ == "__main__":
     port = int(os.getenv("RAG_PORT", "8000"))
-    uvicorn.run(app, host="0.0.0.0", port=port)
+    uvicorn.run(
+        app, 
+        host="0.0.0.0", 
+        port=port,
+        workers=1,
+        log_level="info"
+    )

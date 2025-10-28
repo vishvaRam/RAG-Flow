@@ -35,19 +35,25 @@ class Config:
     
     # Gemini via OpenAI (for LLM only)
     GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-    GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
+    GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash-lite")
     
     # Google Embeddings via LangChain
     GOOGLE_API_KEY = os.getenv("GEMINI_API_KEY")
     GEMINI_EMBEDDING_MODEL = os.getenv("GEMINI_EMBEDDING_MODEL", "models/gemini-embedding-001")
     EMBEDDING_DIMS = get_env_int("EMBEDDING_DIMS", 768)
     
-    # Reranker (LangChain CrossEncoder - Local)
+    # Query Rewriting
+    ENABLE_QUERY_REWRITING = get_env_bool("ENABLE_QUERY_REWRITING", True)
+    QUERY_REWRITE_MODEL = os.getenv("QUERY_REWRITE_MODEL", "gemini-2.5-flash-lite")
+    QUERY_REWRITE_MAX_TOKENS = get_env_int("QUERY_REWRITE_MAX_TOKENS", 512)
+    QUERY_REWRITE_TIMEOUT = get_env_float("QUERY_REWRITE_TIMEOUT", 5.0)
+    
+    # Reranker (LangChain CrossEncoder model)
     RERANKER_MODEL = os.getenv("RERANKER_MODEL", "cross-encoder/ms-marco-MiniLM-L-12-v2")
     
     # RAG settings
-    TOP_K_RETRIEVAL = get_env_int("TOP_K_RETRIEVAL", 12)
-    TOP_K_RERANK = get_env_int("TOP_K_RERANK", 3)
+    TOP_K_RETRIEVAL = get_env_int("TOP_K_RETRIEVAL", 15)
+    TOP_K_RERANK = get_env_int("TOP_K_RERANK", 5)
     HYBRID_ALPHA = get_env_float("HYBRID_ALPHA", 0.5)
     
     # API settings
