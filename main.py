@@ -48,7 +48,7 @@ es_client = Elasticsearch(
     [f"http://{config.ELASTICSEARCH_HOST}:{config.ELASTICSEARCH_PORT}"],
     max_retries=3,
     retry_on_timeout=True,
-    maxsize=25,
+    # maxsize=25,
     request_timeout=30
 )
 
@@ -211,7 +211,7 @@ async def hybrid_search(
     
     try:
         # ✅ Just await - no semaphore
-        response = await asyncio.to_thread(es_client.search, index=config.INDEX_NAME, body=search_body)
+        response = await asyncio.to_thread(es_client.search, index=config.ELASTICSEARCH_INDEX, body=search_body)
         
         results = [
             {
@@ -334,7 +334,7 @@ async def lifespan(app: FastAPI):
     """Startup and shutdown events"""
     logger.info("Starting RAG API service...")
     logger.info(f"  - Elasticsearch: {config.ELASTICSEARCH_HOST}:{config.ELASTICSEARCH_PORT}")
-    logger.info(f"  - Index: {config.INDEX_NAME}")
+    logger.info(f"  - Index: {config.ELASTICSEARCH_INDEX}")
     logger.info(f"  - Model: {config.GEMINI_MODEL}")
     logger.info(f"  - Reranker: {config.RERANKER_MODEL}")
     logger.info(f"  - Query rewriting: {'ENABLED' if ENABLE_QUERY_REWRITING else 'DISABLED'}")
@@ -347,7 +347,7 @@ async def lifespan(app: FastAPI):
     
     try:
         info = es_client.info()
-        count = es_client.count(index=config.INDEX_NAME)
+        count = es_client.count(index=config.ELASTICSEARCH_INDEX)
         logger.info(f"✓ Elasticsearch {info['version']['number']} - {count['count']} documents")
     except Exception as e:
         logger.error(f"✗ Elasticsearch connection failed: {e}")
@@ -410,7 +410,7 @@ async def health_check():
     """Health check"""
     try:
         es_client.cluster.health()
-        count = es_client.count(index=config.INDEX_NAME)
+        count = es_client.count(index=config.ELASTICSEARCH_INDEX)
         es_status = f"healthy ({count['count']} docs)"
     except Exception as e:
         es_status = f"unhealthy: {e}"

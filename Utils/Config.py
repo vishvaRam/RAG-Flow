@@ -31,7 +31,7 @@ class Config:
     # Elasticsearch
     ELASTICSEARCH_HOST = os.getenv("ELASTICSEARCH_HOST", "localhost")
     ELASTICSEARCH_PORT = get_env_int("ELASTICSEARCH_PORT", 9200)
-    INDEX_NAME = os.getenv("INDEX_NAME", "documents")
+    ELASTICSEARCH_INDEX = os.getenv("ELASTICSEARCH_INDEX", "documents")
     
     # Gemini via OpenAI (for LLM only)
     GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")

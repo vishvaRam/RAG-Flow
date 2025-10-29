@@ -95,7 +95,7 @@ async def lifespan(app: FastAPI):
     logger.info("Starting RAG API service...")
     logger.info(f"Configuration loaded:")
     logger.info(f"  - Elasticsearch: {config.ELASTICSEARCH_HOST}:{config.ELASTICSEARCH_PORT}")
-    logger.info(f"  - Index: {config.INDEX_NAME}")
+    logger.info(f"  - Index: {config.ELASTICSEARCH_INDEX}")
     logger.info(f"  - Gemini Model: {config.GEMINI_MODEL}")
     logger.info(f"  - Embedding Model: {config.GEMINI_EMBEDDING_MODEL}")
     logger.info(f"  - Embedding Dimensions: {config.EMBEDDING_DIMS}")
@@ -256,7 +256,7 @@ async def hybrid_search(
     }
     
     try:
-        response = es_client.search(index=config.INDEX_NAME, body=search_body)
+        response = es_client.search(index=config.ELASTICSEARCH_INDEX, body=search_body)
         
         results = []
         for hit in response['hits']['hits']:
@@ -382,7 +382,7 @@ async def health_check():
         "reranker": "unknown",
         "langfuse": "unknown",
         "config": {
-            "index": config.INDEX_NAME,
+            "index": config.ELASTICSEARCH_INDEX,
             "model": config.GEMINI_MODEL,
             "embedding_model": config.GEMINI_EMBEDDING_MODEL,
             "embedding_dims": config.EMBEDDING_DIMS

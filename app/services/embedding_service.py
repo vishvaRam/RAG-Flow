@@ -20,7 +20,7 @@ class EmbeddingService:
         )
         logger.info(f"✓ Embedding model loaded: {settings.GEMINI_EMBEDDING_MODEL}")
     
-    @observe()
+    # @observe()
     @log_time("Embedding generation")
     async def generate_embedding(self, text: str) -> List[float]:
         """Generate embedding for text"""

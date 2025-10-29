@@ -8,6 +8,8 @@ from app.core.logging import logger
 from app.api.routes import chat, search, health
 from app.api.dependencies import init_services, cleanup_services, get_search_service
 
+from langfuse import get_client
+
 settings = get_settings()
 
 
@@ -30,6 +32,13 @@ async def lifespan(app: FastAPI):
     # ✅ Cleanup on shutdown
     cleanup_services()
     logger.info("✓ Service stopped")
+    try:
+        langfuse = get_client()
+        langfuse.shutdown()
+        logger.info("✅ Langfuse shutdown complete")
+    except Exception as e:
+        logger.error(f"Error during Langfuse shutdown: {e}")
+
 
 
 app = FastAPI(

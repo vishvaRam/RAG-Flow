@@ -20,7 +20,7 @@ class RerankerService:
         cross_encoder = HuggingFaceCrossEncoder(model_name=settings.RERANKER_MODEL)
         self.reranker = CrossEncoderReranker(model=cross_encoder, top_n=settings.TOP_K_RERANK)
     
-    @observe()
+    # @observe()
     @log_time("Reranking")
     async def rerank(
         self,

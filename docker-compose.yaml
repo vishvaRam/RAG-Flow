@@ -14,7 +14,7 @@ services:
       # Elasticsearch
       ELASTICSEARCH_HOST: localhost
       ELASTICSEARCH_PORT: 9200
-      INDEX_NAME: documents
+      ELASTICSEARCH_INDEX: documents
       
       # Gemini via OpenAI
       GEMINI_API_KEY: ${GEMINI_API_KEY}

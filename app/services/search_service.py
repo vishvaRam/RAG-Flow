@@ -37,7 +37,7 @@ class SearchService:
             logger.error(f"Elasticsearch health check failed: {e}")
             return {"status": "unhealthy", "error": str(e)}
     
-    @observe()
+    # @observe()
     @log_time("Hybrid search")
     async def hybrid_search(
         self,

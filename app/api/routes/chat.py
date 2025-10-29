@@ -16,7 +16,7 @@ router = APIRouter()
 
 
 @router.post("/chat")
-@observe()
+# @observe()
 async def chat_endpoint(
     request: ChatRequest,
     rag_service: RAGService = Depends(get_rag_service)  # ✅ This is correct
