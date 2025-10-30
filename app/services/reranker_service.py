@@ -20,7 +20,7 @@ class RerankerService:
         cross_encoder = HuggingFaceCrossEncoder(model_name=settings.RERANKER_MODEL)
         self.reranker = CrossEncoderReranker(model=cross_encoder, top_n=settings.TOP_K_RERANK)
     
-    # @observe()
+    @observe()
     @log_time("Reranking")
     async def rerank(
         self,
@@ -71,3 +71,6 @@ class RerankerService:
         except Exception as e:
             logger.error(f"Reranking failed: {e}", exc_info=True)
             return documents[:top_k]
+
+
+reranker_service = RerankerService()

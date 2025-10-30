@@ -34,7 +34,7 @@ class LLMService:
             max_retries=settings.GEMINI_MAX_RETRIES
         )
     
-    # @observe()
+    @observe()
     @log_time("Query rewriting")
     async def rewrite_query(
         self,
@@ -72,7 +72,7 @@ class LLMService:
             logger.error(f"Query rewriting failed: {e}")
             return query
     
-    # @observe()
+    @observe()
     @log_time("LLM generation")
     async def generate(
         self,
@@ -94,3 +94,6 @@ class LLMService:
         except Exception as e:
             logger.error(f"LLM generation failed: {e}", exc_info=True)
             raise
+
+
+llm_service = LLMService()

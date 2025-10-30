@@ -6,8 +6,7 @@ from fastapi.responses import StreamingResponse
 from langfuse import observe
 
 from app.models.schemas import ChatRequest
-from app.api.dependencies import get_rag_service
-from app.services.rag_service import RAGService
+from app.services.rag_service import rag_service
 from app.core.config import get_settings
 from app.core.logging import logger
 
@@ -16,10 +15,9 @@ router = APIRouter()
 
 
 @router.post("/chat")
-# @observe()
+@observe()
 async def chat_endpoint(
     request: ChatRequest,
-    rag_service: RAGService = Depends(get_rag_service)  # ✅ This is correct
 ):
     """Chat with RAG - returns JSON or streaming response"""
     user_messages = [msg for msg in request.messages if msg.role == "user"]

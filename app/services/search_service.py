@@ -37,7 +37,6 @@ class SearchService:
             logger.error(f"Elasticsearch health check failed: {e}")
             return {"status": "unhealthy", "error": str(e)}
     
-    # @observe()
     @log_time("Hybrid search")
     async def hybrid_search(
         self,
@@ -109,3 +108,5 @@ class SearchService:
         """Close Elasticsearch connection"""
         self.client.close()
         logger.info("✓ Elasticsearch connection closed")
+        
+search_service = SearchService()

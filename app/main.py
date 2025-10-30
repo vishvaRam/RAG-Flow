@@ -6,31 +6,24 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import get_settings
 from app.core.logging import logger
 from app.api.routes import chat, search, health
-from app.api.dependencies import init_services, cleanup_services, get_search_service
+from app.services.search_service import search_service
 
 from langfuse import get_client
 
 settings = get_settings()
-
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Startup and shutdown events"""
     logger.info(f"Starting {settings.APP_NAME} v{settings.APP_VERSION}")
     
-    # ✅ Initialize all services ONCE at startup
-    init_services()
-    
     # Health check
-    search_svc = get_search_service()
-    es_health = await search_svc.health_check()
+    es_health = await search_service.health_check()
     logger.info(f"✓ Elasticsearch: {es_health['status']} ({es_health.get('document_count', 0)} documents)")
     
     logger.info("✓ Service started and ready to accept requests")
     yield
-    
-    # ✅ Cleanup on shutdown
-    cleanup_services()
+
     logger.info("✓ Service stopped")
     try:
         langfuse = get_client()

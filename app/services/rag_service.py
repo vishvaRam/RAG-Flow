@@ -1,8 +1,8 @@
 from typing import List, Dict, Optional
-from app.services.embedding_service import EmbeddingService
-from app.services.search_service import SearchService
-from app.services.reranker_service import RerankerService
-from app.services.llm_service import LLMService
+from app.services.embedding_service import EmbeddingService, embedding_service
+from app.services.search_service import SearchService, search_service
+from app.services.reranker_service import RerankerService, reranker_service
+from app.services.llm_service import LLMService, llm_service
 from app.core.config import get_settings
 from app.core.logging import logger
 
@@ -89,3 +89,11 @@ class RAGService:
             If context is insufficient, say "I don't have enough information to answer this."
 
             Answer:"""
+
+
+rag_service = RAGService(
+    embedding_service=embedding_service,
+    search_service=search_service,
+    reranker_service=reranker_service,
+    llm_service=llm_service
+)
