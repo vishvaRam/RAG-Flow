@@ -7,6 +7,7 @@ from app.core.config import get_settings
 from app.core.logging import logger
 from app.api.routes import chat, search, health
 from app.services.search_service import search_service
+from app.services.db_service import db_service
 
 from langfuse import get_client
 
@@ -20,7 +21,11 @@ async def lifespan(app: FastAPI):
     # Health check
     es_health = await search_service.health_check()
     logger.info(f"✓ Elasticsearch: {es_health['status']} ({es_health.get('document_count', 0)} documents)")
-    
+
+    # Initialize DB connections
+    await db_service._ensure_pool()
+    logger.info("✓ Database connection pool established")
+
     logger.info("✓ Service started and ready to accept requests")
     yield
 
@@ -29,6 +34,9 @@ async def lifespan(app: FastAPI):
         langfuse = get_client()
         langfuse.shutdown()
         logger.info("✅ Langfuse shutdown complete")
+        await db_service.close_all_connections()
+        logger.info("✅ Database connections closed")
+        
     except Exception as e:
         logger.error(f"Error during Langfuse shutdown: {e}")
 

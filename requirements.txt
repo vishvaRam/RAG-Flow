@@ -35,3 +35,6 @@ langchain-google-genai
 langfuse
 
 uv
+
+# DB
+asyncpg

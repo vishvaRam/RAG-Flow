@@ -1,7 +1,6 @@
 import asyncio
 from typing import List, Dict, Optional, Any
 from elasticsearch import Elasticsearch
-from langfuse import observe
 
 from app.core.config import get_settings
 from app.core.logging import logger
@@ -14,7 +13,6 @@ class SearchService:
     """Service for Elasticsearch operations"""
     
     def __init__(self):
-        # ✅ Fixed for Elasticsearch 9.x - removed maxsize parameter
         self.client = Elasticsearch(
             hosts=[f"http://{settings.ELASTICSEARCH_HOST}:{settings.ELASTICSEARCH_PORT}"],
             max_retries=settings.ELASTICSEARCH_MAX_RETRIES,

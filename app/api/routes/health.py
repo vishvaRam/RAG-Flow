@@ -1,6 +1,5 @@
-from fastapi import APIRouter, Depends
-from app.api.dependencies import get_search_service
-from app.services.search_service import SearchService
+from fastapi import APIRouter
+from app.services.search_service import SearchService, search_service
 from app.core.config import get_settings
 
 settings = get_settings()
@@ -8,12 +7,10 @@ router = APIRouter()
 
 
 @router.get("/health")
-async def health_check(
-    search_service: SearchService = Depends(get_search_service)
-):
+async def health_check():
     """Health check endpoint"""
     es_health = await search_service.health_check()
-    
+
     return {
         "status": "healthy" if es_health["status"] == "healthy" else "degraded",
         "elasticsearch": es_health,

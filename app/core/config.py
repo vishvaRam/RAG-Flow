@@ -59,6 +59,14 @@ class Settings(BaseSettings):
     LANGFUSE_HOST: str = "https://cloud.langfuse.com"
     LANGFUSE_DEBUG: bool = False
     
+    DB_HOST: str = "localhost"
+    DB_PORT: int = 5433
+    DB_NAME: str = 'rag_database'
+    DB_USER: str = 'postgres'
+    DB_PASSWORD: str = 'admin'
+    DB_MIN_CONNECTIONS: int = 2
+    DB_MAX_CONNECTIONS: int = 10
+    
     # Logging
     LOG_LEVEL: str = "INFO"
     LOG_FILE: str = "logs/rag_api.log"
