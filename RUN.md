@@ -3,6 +3,25 @@ gunicorn app.main:app -b 0.0.0.0:4545 -w 1 -k uvicorn.workers.UvicornWorker --ti
 ### With Session
 
 {
+  "session_id": "jee_physics01",
+  "user_id": "student_123",
+  "assistant_id": "asfasfasf",
+  "messages": [
+    {
+      "role": "user",
+      "content": "what are the NEWTON's laws?"
+    }
+  ],
+  "stream": false,
+  "top_k": 5,
+  "temperature": 0.3
+}
+
+---
+
+
+
+{
   "session_id": "jee_physics_session_001",
   "user_id": "student_12345",
   "assistant_id": "rag_assistant_v1",
@@ -36,8 +55,6 @@ gunicorn app.main:app -b 0.0.0.0:4545 -w 1 -k uvicorn.workers.UvicornWorker --ti
 
 ---
 
-
-
 {
   "session_id": "jee_maths_session_003",
   "user_id": "student_12345",
@@ -54,8 +71,6 @@ gunicorn app.main:app -b 0.0.0.0:4545 -w 1 -k uvicorn.workers.UvicornWorker --ti
 }
 
 ---
-
-
 
 {
   "session_id": "jee_physics_thermo_005",
@@ -74,8 +89,6 @@ gunicorn app.main:app -b 0.0.0.0:4545 -w 1 -k uvicorn.workers.UvicornWorker --ti
 
 ---
 
-
-
 {
   "session_id": "jee_maths_calculus_006",
   "user_id": "student_11111",
@@ -93,8 +106,6 @@ gunicorn app.main:app -b 0.0.0.0:4545 -w 1 -k uvicorn.workers.UvicornWorker --ti
 
 ---
 
-
-
 # Search
 
 {
@@ -103,8 +114,6 @@ gunicorn app.main:app -b 0.0.0.0:4545 -w 1 -k uvicorn.workers.UvicornWorker --ti
 }
 
 ---
-
-
 
 # Chat
 
