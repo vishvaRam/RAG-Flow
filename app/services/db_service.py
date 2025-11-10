@@ -1,7 +1,7 @@
 import os
 import secrets
 import string
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Tuple
 from contextlib import asynccontextmanager
 import asyncpg
 from langfuse import observe
@@ -11,6 +11,7 @@ from app.models.schemas import (
     ChatMessageReadDB,
     UserMessageCreateDB,
     AssistantMessageCreateDB,
+    SessionSummaryDB,
 )
 
 
@@ -136,34 +137,6 @@ class PostgreSQLService:
             else:
                 await conn.execute(query, *args)
                 return None
-
-    @observe()
-    async def get_chat_history(
-        self, 
-        session_id: str, 
-        limit: Optional[int] = 50
-    ) -> List[ChatMessageReadDB]:
-        """
-        Retrieve chat history for a session.
-        
-        Args:
-            session_id: Session identifier
-            limit: Maximum number of messages to retrieve
-            
-        Returns:
-            List of ChatMessageReadDB objects
-        """
-        query = """
-        SELECT id, session_id, sender_id, sender_type, message, 
-               created_at, updated_at, deleted_at
-        FROM chat_messages_history
-        WHERE session_id = $1 AND deleted_at IS NULL
-        ORDER BY created_at DESC
-        LIMIT $2
-        """
-        
-        results = await self.execute_query(query, session_id, limit)
-        return [ChatMessageReadDB(**row) for row in results]
 
     @observe()
     async def insert_chat_message(
@@ -355,6 +328,110 @@ class PostgreSQLService:
         
         result = await self.execute_query(query, message_id, fetchone=True)
         return ChatMessageReadDB(**result) if result else None
+    
+    @observe()
+    async def get_chat_history(
+        self, 
+        session_id: str, 
+        limit: Optional[int] = 50,
+        offset: Optional[int] = 0
+    ) -> List[ChatMessageReadDB]:
+        """
+        Retrieve chat history for a session.
+        
+        Args:
+            session_id: Session identifier
+            limit: Maximum number of messages to retrieve
+            offset: Number of messages to skip
+            
+        Returns:
+            List of ChatMessageReadDB objects
+        """
+        query = """
+        SELECT id, session_id, sender_id, sender_type, message, 
+               created_at, updated_at, deleted_at
+        FROM chat_messages_history
+        WHERE session_id = $1 AND deleted_at IS NULL
+        ORDER BY created_at DESC
+        LIMIT $2 OFFSET $3
+        """
+        
+        results = await self.execute_query(query, session_id, limit, offset)
+        return [ChatMessageReadDB(**row) for row in results]
+    
+    async def count_session_messages(self, session_id: str) -> int:
+        """Count total messages in a session."""
+        query = """
+        SELECT COUNT(*) as count
+        FROM chat_messages_history
+        WHERE session_id = $1 AND deleted_at IS NULL
+        """
+        result = await self.execute_query(query, session_id, fetchone=True)
+        return result['count'] if result else 0
+    
+    async def get_session_summary(self, session_id: str) -> Optional[SessionSummaryDB]:
+        """Get the latest summary for a session."""
+        query = """
+        SELECT id, session_id, summary, messages_count, created_at, updated_at
+        FROM chat_session_summaries
+        WHERE session_id = $1
+        ORDER BY created_at DESC
+        LIMIT 1
+        """
+        result = await self.execute_query(query, session_id, fetchone=True)
+        return SessionSummaryDB(**result) if result else None
+    
+    async def save_session_summary(
+        self,
+        session_id: str,
+        summary: str,
+        messages_count: int
+    ) -> SessionSummaryDB:
+        """Save or update session summary."""
+        summary_id = generate_message_id(14)
+        query = """
+        INSERT INTO chat_session_summaries
+        (id, session_id, summary, messages_count, created_at)
+        VALUES ($1, $2, $3, $4, EXTRACT(EPOCH FROM NOW())::bigint)
+        RETURNING id, session_id, summary, messages_count, created_at, updated_at
+        """
+        result = await self.execute_query(
+            query,
+            summary_id,
+            session_id,
+            summary,
+            messages_count,
+            fetchone=True
+        )
+        return SessionSummaryDB(**result)
+    
+    async def get_conversation_context(
+        self,
+        session_id: str,
+        window_size: int = 10
+    ) -> Tuple[Optional[str], List[ChatMessageReadDB], int]:
+        """
+        Get conversation context with summary and recent messages.
+        
+        Args:
+            session_id: Session identifier
+            window_size: Number of recent messages to retrieve in full
+            
+        Returns:
+            Tuple of (summary, recent_messages, total_count)
+        """
+        # Get total message count
+        total_count = await self.count_session_messages(session_id)
+        
+        # Get recent messages
+        recent_messages = await self.get_chat_history(session_id, limit=window_size)
+        recent_messages.reverse()  # Chronological order
+        
+        # Get summary if exists
+        summary_obj = await self.get_session_summary(session_id)
+        summary = summary_obj.summary if summary_obj else None
+        
+        return summary, recent_messages, total_count
     
     async def close_all_connections(self):
         """Close all connections in the pool."""

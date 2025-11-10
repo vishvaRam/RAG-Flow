@@ -126,3 +126,29 @@ class ChatMessageUpdateDB(BaseModel):
     """Database model for updating chat messages"""
     message: str
     updated_at: Optional[int] = None
+
+
+# ==================== Summary Models ====================
+
+class SessionSummaryDB(BaseModel):
+    """Database model for session summary"""
+    id: str
+    session_id: str
+    summary: str
+    messages_count: int
+    created_at: int
+    updated_at: Optional[int] = None
+    
+    @property
+    def created_at_datetime(self) -> datetime:
+        return datetime.fromtimestamp(self.created_at)
+    
+    class Config:
+        from_attributes = True
+
+
+class ConversationContext(BaseModel):
+    """Conversation context for LLM"""
+    summary: Optional[str] = None  # Summarized older conversations
+    recent_messages: List[dict] = []  # Last N full messages
+    total_messages: int = 0
