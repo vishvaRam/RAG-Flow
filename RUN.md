@@ -1,3 +1,5 @@
+gunicorn app.main:app -b 0.0.0.0:4545 -w 1 -k uvicorn.workers.UvicornWorker --timeout 120
+
 With Session
 
 {
