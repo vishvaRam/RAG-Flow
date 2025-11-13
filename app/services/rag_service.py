@@ -64,20 +64,17 @@ class RAGService:
             
     async def process_query(
         self,
-        query: str,
+        rewritten_query: str,
         subject_filter: Optional[str] = None,
         topic_filter: Optional[str] = None,
         top_k: Optional[int] = None
     ) -> tuple:
-        """Process query through RAG pipeline"""
+        """Process query through RAG pipeline"""  
         
-        # Step 1: Query rewriting
-        rewritten_query = await self.llm.rewrite_query(query, subject_filter)
-        
-        # Step 2: Generate embedding
+        # Step 1: Generate embedding
         query_vector = await self.embedding.generate_embedding(rewritten_query)
         
-        # Step 3: Hybrid search
+        # Step 2: Hybrid search
         results = await self.search.hybrid_search(
             query=rewritten_query,
             query_vector=query_vector,
@@ -87,9 +84,9 @@ class RAGService:
             alpha=settings.HYBRID_ALPHA
         )
         
-        # Step 4: Rerank
+        # Step 2: Rerank
         top_k = top_k or settings.TOP_K_RERANK
-        reranked = await self.reranker.rerank(query, results, top_k) if results else []
+        reranked = await self.reranker.rerank(rewritten_query, results, top_k) if results else []
         
         return reranked, results
     

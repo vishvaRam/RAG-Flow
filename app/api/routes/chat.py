@@ -1,52 +1,20 @@
 import json
 import time
 import asyncio
-from fastapi import APIRouter, BackgroundTasks, HTTPException, Depends
+from fastapi import APIRouter, BackgroundTasks, HTTPException
 from fastapi.responses import StreamingResponse
 from langfuse import observe, propagate_attributes
 
 from app.models.schemas import ChatRequest, ChatRequestSession, UserMessageCreateDB, AssistantMessageCreateDB
 from app.services.rag_service import rag_service
 from app.services.db_service import db_service
+from app.services.llm_service import llm_service
 from app.core.config import get_settings
 from app.core.logging import logger
 from app.services.memory_service import memory_service
 
 settings = get_settings()
 router = APIRouter()
-
-
-async def summarize_conversation_background(session_id: str):
-    """Background task to summarize conversation."""
-    try:
-        logger.info(f"🔄 Starting background summarization for session {session_id}")
-        
-        # Generate summary prompt
-        summary_prompt = await memory_service.generate_summary_prompt(session_id)
-        
-        # Use LLM to generate summary
-        response = await rag_service.llm.generate(
-            messages=[
-                {"role": "system", "content": "You are a helpful assistant that creates concise conversation summaries."},
-                {"role": "user", "content": summary_prompt}
-            ],
-            temperature=0.3,
-            stream=False
-        )
-        
-        summary = response.choices[0].message.content.strip()
-        
-        # Save summary to database
-        total_count = await db_service.count_session_messages(session_id)
-        await db_service.save_session_summary(session_id, summary, total_count)
-        
-        logger.info(f"✅ Background summarization completed for session {session_id}")
-        logger.info(f"📝 Summary: {summary[:100]}...")
-        
-    except Exception as e:
-        logger.error(f"❌ Error in background summarization: {e}", exc_info=True)
-
-
 
 @router.post("/chat")
 @observe()
@@ -64,9 +32,12 @@ async def chat_endpoint(
     query = user_messages[-1].content
     logger.info(f"💬 Chat (stateless): '{query[:100]}...'")
     
+    # Step 1: Query rewriting
+    rewritten_query = await llm_service.rewrite_query(query, request.subject_filter)
+    
     # Process RAG pipeline
     reranked, _ = await rag_service.process_query(
-        query=query,
+        rewritten_query=rewritten_query,
         subject_filter=request.subject_filter,
         topic_filter=request.topic_filter,
         top_k=request.top_k
@@ -182,6 +153,7 @@ async def chat_endpoint_with_history(
     Uses sliding window + progressive summarization for long conversations.
     """
     with propagate_attributes(user_id=request.user_id, session_id=request.session_id):
+        
         user_messages = [msg for msg in request.messages if msg.role == "user"]
         if not user_messages:
             raise HTTPException(status_code=400, detail="No user message found")
@@ -205,8 +177,10 @@ async def chat_endpoint_with_history(
                 sender_id=request.user_id,
                 message=query
             )
-            user_result = await db_service.insert_user_message(user_msg)
-            logger.info(f"✅ Stored user message with ID: {user_result.id}")
+            background_tasks.add_task(
+                            db_service.insert_user_message,
+                            user_msg
+                        )
         except Exception as e:
             logger.error(f"Error storing user message: {e}", exc_info=True)
             raise HTTPException(status_code=500, detail="Failed to store user message")
@@ -215,10 +189,17 @@ async def chat_endpoint_with_history(
         should_summarize = await memory_service.should_summarize(request.session_id)
         if should_summarize:
             logger.info(f"🔔 Scheduling background summarization for session {request.session_id}")
+
+        # Query rewriting
+        rewritten_query = await llm_service.rewrite_query_with_history(
+                query, 
+                context, 
+                num_previous_messages=settings.QUERY_REWRITE_WITH_HISTORY_COUNT,
+                subject_filter=request.subject_filter)
         
         # Process RAG pipeline
         reranked, _ = await rag_service.process_query(
-            query=query,
+            rewritten_query=rewritten_query,
             subject_filter=request.subject_filter,
             topic_filter=request.topic_filter,
             top_k=request.top_k
@@ -276,15 +257,17 @@ async def chat_endpoint_with_history(
                             sender_id=request.assistant_id,
                             message=full_response
                         )
-                        assistant_result = await db_service.insert_assistant_message(assistant_msg)
-                        logger.info(f"✅ Stored assistant message with ID: {assistant_result.id}")
+                        background_tasks.add_task(
+                            db_service.insert_assistant_message,
+                            assistant_msg
+                        )
                     except Exception as e:
                         logger.error(f"Error storing assistant message: {e}", exc_info=True)
                     
                     # Trigger summarization in background if needed
                     if should_summarize:
                         background_tasks.add_task(
-                            summarize_conversation_background,
+                            llm_service.generate_summary,
                             request.session_id
                         )
                     
@@ -350,15 +333,17 @@ async def chat_endpoint_with_history(
                     sender_id=request.assistant_id,
                     message=answer
                 )
-                assistant_result = await db_service.insert_assistant_message(assistant_msg)
-                logger.info(f"✅ Stored assistant message with ID: {assistant_result.id}")
+                background_tasks.add_task(
+                            db_service.insert_assistant_message,
+                            assistant_msg
+                        )
             except Exception as e:
                 logger.error(f"Error storing assistant message: {e}", exc_info=True)
             
             # Trigger summarization in background if needed
             if should_summarize:
                 background_tasks.add_task(
-                    summarize_conversation_background,
+                    llm_service.generate_summary,
                     request.session_id
                 )
             

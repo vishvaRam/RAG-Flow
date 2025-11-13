@@ -17,7 +17,7 @@ async def search_endpoint(
     logger.info(f"🔍 Search: '{request.query}' (top_k={request.top_k})")
 
     reranked, results = await rag_service.process_query(
-            query=request.query,
+            rewritten_query=request.query,
             subject_filter=request.subject_filter,
             topic_filter=request.topic_filter,
             top_k=request.top_k

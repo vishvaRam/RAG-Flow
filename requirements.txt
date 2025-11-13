@@ -33,7 +33,6 @@ langchain-google-genai
 
 # Observability
 langfuse
-
 uv
 
 # DB

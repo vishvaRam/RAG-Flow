@@ -3,6 +3,7 @@ from functools import lru_cache
 from typing import Optional
 from pydantic_settings import BaseSettings
 from dotenv import load_dotenv
+from sympy import Q
 
 load_dotenv()
 
@@ -23,11 +24,10 @@ class Settings(BaseSettings):
     ELASTICSEARCH_INDEX: str = "documents"
     ELASTICSEARCH_TIMEOUT: int = 30
     ELASTICSEARCH_MAX_RETRIES: int = 3
-    # ELASTICSEARCH_POOL_SIZE: int = 25
     
     # Gemini/OpenAI Configuration
     GEMINI_API_KEY: str
-    GEMINI_MODEL: str = "gemini-2.5-flash-lite"
+    GEMINI_MODEL: str = "gemini-2.5-flash"
     GEMINI_EMBEDDING_MODEL: str = "models/gemini-embedding-001"
     GEMINI_TIMEOUT: float = 20.0
     GEMINI_MAX_RETRIES: int = 1
@@ -40,6 +40,7 @@ class Settings(BaseSettings):
     QUERY_REWRITE_MODEL: str = "gemini-2.5-flash-lite"
     QUERY_REWRITE_MAX_TOKENS: int = 256
     QUERY_REWRITE_TIMEOUT: float = 5.0
+    QUERY_REWRITE_WITH_HISTORY_COUNT: int = 5
     
     # Reranker
     RERANKER_MODEL: str = "cross-encoder/ms-marco-MiniLM-L2-v2"
@@ -59,6 +60,7 @@ class Settings(BaseSettings):
     LANGFUSE_HOST: str = "https://cloud.langfuse.com"
     LANGFUSE_DEBUG: bool = False
     
+    # Database Settings
     DB_HOST: str = "localhost"
     DB_PORT: int = 5433
     DB_NAME: str = 'rag_database'
@@ -66,6 +68,12 @@ class Settings(BaseSettings):
     DB_PASSWORD: str = 'admin'
     DB_MIN_CONNECTIONS: int = 2
     DB_MAX_CONNECTIONS: int = 10
+    
+    # History and Summary Settings
+    MAX_HISTORY_MESSAGES: int = 10
+    SUMMARY_INTERVAL: int = 10
+    SUMMARY_MODEL: str = "gemini-2.5-flash-lite"
+    SUMMARY_MAX_TOKENS: int = 512
     
     # Logging
     LOG_LEVEL: str = "INFO"

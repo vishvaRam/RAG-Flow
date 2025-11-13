@@ -1,4 +1,3 @@
-import os
 import secrets
 import string
 from typing import Optional, List, Dict, Any, Tuple
@@ -14,9 +13,7 @@ from app.models.schemas import (
     SessionSummaryDB,
 )
 
-
 settings = get_settings()
-
 
 def generate_message_id(length: int = 14) -> str:
     """
@@ -102,11 +99,11 @@ class PostgreSQLService:
         """
         await self._ensure_pool()
         
-        connection = await self.pool.acquire()
+        connection = await self.pool.acquire() # type: ignore
         try:
             yield connection
         finally:
-            await self.pool.release(connection)
+            await self.pool.release(connection) # type: ignore
     
     async def execute_query(
         self, 
@@ -130,7 +127,7 @@ class PostgreSQLService:
         async with self.acquire_connection() as conn:
             if fetchone:
                 result = await conn.fetchrow(query, *args)
-                return dict(result) if result else None
+                return dict(result) if result else None  # type: ignore
             elif fetch:
                 results = await conn.fetch(query, *args)
                 return [dict(row) for row in results]
@@ -175,7 +172,7 @@ class PostgreSQLService:
             fetchone=True
         )
 
-        return ChatMessageReadDB(**result)
+        return ChatMessageReadDB(**result) # type: ignore
 
     @observe()
     async def insert_user_message(
@@ -213,7 +210,7 @@ class PostgreSQLService:
             fetchone=True
         )
 
-        return ChatMessageReadDB(**result)
+        return ChatMessageReadDB(**result) # type: ignore
 
     @observe()
     async def insert_assistant_message(
@@ -251,7 +248,7 @@ class PostgreSQLService:
             fetchone=True
         )
 
-        return ChatMessageReadDB(**result)
+        return ChatMessageReadDB(**result) # type: ignore
 
     @observe()
     async def update_chat_message(
@@ -283,7 +280,7 @@ class PostgreSQLService:
             message_id, 
             fetchone=True
         )
-        return ChatMessageReadDB(**result) if result else None
+        return ChatMessageReadDB(**result) if result else None # type: ignore
 
     @observe()
     async def soft_delete_message(self, message_id: str) -> bool:
@@ -327,7 +324,7 @@ class PostgreSQLService:
         """
         
         result = await self.execute_query(query, message_id, fetchone=True)
-        return ChatMessageReadDB(**result) if result else None
+        return ChatMessageReadDB(**result) if result else None # type: ignore
     
     @observe()
     async def get_chat_history(
@@ -357,7 +354,7 @@ class PostgreSQLService:
         """
         
         results = await self.execute_query(query, session_id, limit, offset)
-        return [ChatMessageReadDB(**row) for row in results]
+        return [ChatMessageReadDB(**row) for row in results] # type: ignore
     
     async def count_session_messages(self, session_id: str) -> int:
         """Count total messages in a session."""
@@ -367,7 +364,7 @@ class PostgreSQLService:
         WHERE session_id = $1 AND deleted_at IS NULL
         """
         result = await self.execute_query(query, session_id, fetchone=True)
-        return result['count'] if result else 0
+        return result['count'] if result else 0 # type: ignore
     
     async def get_session_summary(self, session_id: str) -> Optional[SessionSummaryDB]:
         """Get the latest summary for a session."""
@@ -379,7 +376,7 @@ class PostgreSQLService:
         LIMIT 1
         """
         result = await self.execute_query(query, session_id, fetchone=True)
-        return SessionSummaryDB(**result) if result else None
+        return SessionSummaryDB(**result) if result else None # type: ignore
     
     async def save_session_summary(
         self,
@@ -403,7 +400,7 @@ class PostgreSQLService:
             messages_count,
             fetchone=True
         )
-        return SessionSummaryDB(**result)
+        return SessionSummaryDB(**result) # type: ignore
     
     async def get_conversation_context(
         self,
