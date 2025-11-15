@@ -81,8 +81,8 @@ async def root():
     return {
         "service": settings.APP_NAME,
         "version": settings.APP_VERSION,
-        "model": settings.GEMINI_MODEL,
-        "embedding_model": settings.GEMINI_EMBEDDING_MODEL,
+        "model": settings.LLM_MODEL,
+        "embedding_model": settings.EMBEDDING_MODEL,
         "reranker": settings.RERANKER_MODEL,
         "endpoints": {
             "/chat": "Chat with RAG",

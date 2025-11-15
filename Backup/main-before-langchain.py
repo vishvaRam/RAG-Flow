@@ -63,15 +63,15 @@ def log_time(operation_name: str):
 
 
 # Validate required environment variables
-if not config.GEMINI_API_KEY:
-    raise ValueError("GEMINI_API_KEY environment variable is required")
+if not config.LLM_API_KEY:
+    raise ValueError("LLM_API_KEY environment variable is required")
 if not config.GOOGLE_API_KEY:
     raise ValueError("GOOGLE_API_KEY environment variable is required")
 
 
 # Initialize OpenAI client with Langfuse wrapper
 openai_client = openai.OpenAI(
-    api_key=config.GEMINI_API_KEY,
+    api_key=config.LLM_API_KEY,
     base_url="https://generativelanguage.googleapis.com/v1beta/openai/"
 )
 
@@ -82,7 +82,7 @@ es_client = Elasticsearch([f"http://{config.ELASTICSEARCH_HOST}:{config.ELASTICS
 
 # Initialize Google Embeddings model
 embeddings_model = GoogleGenerativeAIEmbeddings(
-    model=config.GEMINI_EMBEDDING_MODEL,
+    model=config.EMBEDDING_MODEL,
     google_api_key=config.GOOGLE_API_KEY,
 )
 
@@ -96,8 +96,8 @@ async def lifespan(app: FastAPI):
     logger.info(f"Configuration loaded:")
     logger.info(f"  - Elasticsearch: {config.ELASTICSEARCH_HOST}:{config.ELASTICSEARCH_PORT}")
     logger.info(f"  - Index: {config.ELASTICSEARCH_INDEX}")
-    logger.info(f"  - Gemini Model: {config.GEMINI_MODEL}")
-    logger.info(f"  - Embedding Model: {config.GEMINI_EMBEDDING_MODEL}")
+    logger.info(f"  - Gemini Model: {config.LLM_MODEL}")
+    logger.info(f"  - Embedding Model: {config.EMBEDDING_MODEL}")
     logger.info(f"  - Embedding Dimensions: {config.EMBEDDING_DIMS}")
     logger.info(f"  - Reranker URL: {config.RERANKER_URL}")
     
@@ -360,8 +360,8 @@ async def root():
     return {
         "service": "Hybrid RAG API with Gemini",
         "version": "1.0.0",
-        "model": config.GEMINI_MODEL,
-        "embedding_model": config.GEMINI_EMBEDDING_MODEL,
+        "model": config.LLM_MODEL,
+        "embedding_model": config.EMBEDDING_MODEL,
         "embedding_dims": config.EMBEDDING_DIMS,
         "langfuse_enabled": bool(config.LANGFUSE_PUBLIC_KEY and config.LANGFUSE_SECRET_KEY),
         "endpoints": {
@@ -383,8 +383,8 @@ async def health_check():
         "langfuse": "unknown",
         "config": {
             "index": config.ELASTICSEARCH_INDEX,
-            "model": config.GEMINI_MODEL,
-            "embedding_model": config.GEMINI_EMBEDDING_MODEL,
+            "model": config.LLM_MODEL,
+            "embedding_model": config.EMBEDDING_MODEL,
             "embedding_dims": config.EMBEDDING_DIMS
         }
     }
@@ -523,7 +523,7 @@ async def chat_endpoint(request: ChatRequest):
                 try:
                     llm_start = time.time()
                     stream = openai_client.chat.completions.create(
-                        model=config.GEMINI_MODEL,
+                        model=config.LLM_MODEL,
                         messages=gemini_messages,
                         max_tokens=config.MAX_TOKENS,
                         temperature=temperature,
@@ -557,7 +557,7 @@ async def chat_endpoint(request: ChatRequest):
         else:
             llm_start = time.time()
             response = openai_client.chat.completions.create(
-                model=config.GEMINI_MODEL,
+                model=config.LLM_MODEL,
                 messages=gemini_messages,
                 max_tokens=config.MAX_TOKENS,
                 temperature=temperature

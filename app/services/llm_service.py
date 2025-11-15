@@ -31,10 +31,10 @@ class LLMService:
     
     def __init__(self):
         self.client = AsyncOpenAI(
-            api_key=settings.GEMINI_API_KEY,
-            base_url="https://generativelanguage.googleapis.com/v1beta/openai/",
-            timeout=settings.GEMINI_TIMEOUT,
-            max_retries=settings.GEMINI_MAX_RETRIES
+            api_key=settings.LLM_API_KEY,
+            base_url=settings.LLM_PROVIDER_URL,
+            timeout=settings.LLM_TIMEOUT,
+            max_retries=settings.LLM_MAX_RETRIES
         )
     
     @observe()
@@ -187,7 +187,7 @@ class LLMService:
         """Generate LLM response"""
         try:
             response = await self.client.chat.completions.create(
-                model=settings.GEMINI_MODEL,
+                model=settings.LLM_MODEL,
                 messages=messages, # type: ignore
                 max_tokens=settings.MAX_TOKENS,
                 temperature=temperature or settings.TEMPERATURE,

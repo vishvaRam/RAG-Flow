@@ -15,10 +15,10 @@ class EmbeddingService:
     
     def __init__(self):
         self.model = GoogleGenerativeAIEmbeddings(
-            model=settings.GEMINI_EMBEDDING_MODEL,
-            google_api_key=settings.GEMINI_API_KEY, # type: ignore
+            model=settings.EMBEDDING_MODEL,
+            google_api_key=settings.LLM_API_KEY, # type: ignore
         )
-        logger.info(f"✓ Embedding model loaded: {settings.GEMINI_EMBEDDING_MODEL}")
+        logger.info(f"✓ Embedding model loaded: {settings.EMBEDDING_MODEL}")
     
     @observe()
     @log_time("Embedding generation")

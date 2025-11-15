@@ -17,9 +17,10 @@ services:
       ELASTICSEARCH_INDEX: documents
       
       # Gemini via OpenAI
-      GEMINI_API_KEY: ${GEMINI_API_KEY}
-      GEMINI_MODEL: gemini-2.5-flash
-      GEMINI_EMBEDDING_MODEL: models/gemini-embedding-001
+      LLM_PROVIDER_URL: https://generativelanguage.googleapis.com/v1beta/openai/
+      LLM_API_KEY: ${LLM_API_KEY}
+      LLM_MODEL: gemini-2.5-flash
+      EMBEDDING_MODEL: models/gemini-embedding-001
       EMBEDDING_DIMS: 768
 
       # Query Rewriting

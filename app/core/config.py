@@ -26,11 +26,12 @@ class Settings(BaseSettings):
     ELASTICSEARCH_MAX_RETRIES: int = 3
     
     # Gemini/OpenAI Configuration
-    GEMINI_API_KEY: str
-    GEMINI_MODEL: str = "gemini-2.5-flash"
-    GEMINI_EMBEDDING_MODEL: str = "models/gemini-embedding-001"
-    GEMINI_TIMEOUT: float = 20.0
-    GEMINI_MAX_RETRIES: int = 1
+    LLM_PROVIDER_URL: str = "https://generativelanguage.googleapis.com/v1beta/openai/"
+    LLM_API_KEY: str
+    LLM_MODEL: str = "gemini-2.5-flash"
+    EMBEDDING_MODEL: str = "models/gemini-embedding-001"
+    LLM_TIMEOUT: float = 20.0
+    LLM_MAX_RETRIES: int = 2
     
     # Embeddings
     EMBEDDING_DIMS: int = 768
