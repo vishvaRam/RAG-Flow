@@ -178,9 +178,9 @@ async def chat_endpoint_with_history(
                 message=query
             )
             background_tasks.add_task(
-                            db_service.insert_user_message,
-                            user_msg
-                        )
+                db_service.insert_user_message,
+                user_msg
+            )
         except Exception as e:
             logger.error(f"Error storing user message: {e}", exc_info=True)
             raise HTTPException(status_code=500, detail="Failed to store user message")
@@ -192,10 +192,11 @@ async def chat_endpoint_with_history(
 
         # Query rewriting
         rewritten_query = await llm_service.rewrite_query_with_history(
-                query, 
-                context, 
-                num_previous_messages=settings.QUERY_REWRITE_WITH_HISTORY_COUNT,
-                subject_filter=request.subject_filter)
+            query, 
+            context, 
+            num_previous_messages=settings.QUERY_REWRITE_WITH_HISTORY_COUNT,
+            subject_filter=request.subject_filter
+        )
         
         # Process RAG pipeline
         reranked, _ = await rag_service.process_query(
@@ -207,21 +208,36 @@ async def chat_endpoint_with_history(
         
         # Build RAG context
         rag_context = rag_service.build_context(reranked)
-        rag_prompt = rag_service.create_rag_prompt(query, rag_context)
         
-        # Build conversation messages with memory context
-        conversation_messages = [rag_service.llm.SYSTEM_MESSAGE]
+        # ===== FIX: Build system message properly =====
+        system_content_parts = [rag_service.llm.SYSTEM_MESSAGE["content"]]
         
-        # Add conversation history context if available
-        if context and (context.summary or context.recent_messages):
-            context_prompt = memory_service.build_context_prompt(context, query)
-            conversation_messages.append({
-                "role": "system",
-                "content": f"Conversation Context:\n{context_prompt}"
-            })
+        # Optionally add conversation summary to system (keep it brief!)
+        if context and context.summary:
+            system_content_parts.append(f"\n\nPrevious Conversation Summary:\n{context.summary}")
         
-        # Add RAG-enhanced query
-        conversation_messages.append({"role": "user", "content": rag_prompt})
+        unified_system_message = {
+            "role": "system",
+            "content": "\n".join(system_content_parts)
+        }
+        
+        conversation_messages = [unified_system_message]
+        
+        # ===== FIX: Add recent conversation history (all of them) =====
+        if context and context.recent_messages:
+            for msg in context.recent_messages:  # Include ALL recent messages
+                conversation_messages.append({
+                    "role": "user" if msg["role"] == "user" else "assistant",
+                    "content": msg["content"]
+                })
+        
+        # ===== FIX: Proper formatting for current user message =====
+        current_user_message = rag_service.create_rag_prompt(query, rag_context)
+
+        conversation_messages.append({
+            "role": "user",
+            "content": current_user_message
+        })
         
         temperature = request.temperature or settings.TEMPERATURE
         

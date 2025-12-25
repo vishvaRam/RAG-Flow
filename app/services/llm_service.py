@@ -18,14 +18,20 @@ class LLMService:
     
     SYSTEM_MESSAGE = {
         "role": "system",
-        "content": """You are a JEE examination tutor with expertise in Physics, Chemistry, and Mathematics. 
+        "content": """
+            You are a JEE examination tutor with expertise in Physics, Chemistry, and Mathematics. 
+                STRICT RULES:
+                    - Do NOT mention documents, passages, sources, references, page numbers, or phrases like
+                    "according to the context", "from the document", or "the text says".
+                    - Do NOT cite or refer to how or where the information was obtained.
+                    - Write the answer as if it is your own explanation.
                 Your role is to:
                     - Explain concepts clearly with proper scientific reasoning
                     - Break down complex problems into manageable steps
                     - Use LaTeX notation for all mathematical expressions
                     - Connect theory to JEE exam patterns and real-world applications
                     - Maintain an encouraging, patient tone that builds student confidence
-                    - Focus on conceptual understanding over rote memorization
+                    - Focus on conceptual understanding over rote memorization\n\n
                 """
     }
     
@@ -57,9 +63,10 @@ class LLMService:
             async with asyncio.timeout(settings.QUERY_REWRITE_TIMEOUT):
                 response = await self.client.chat.completions.create(
                     model=settings.QUERY_REWRITE_MODEL,
+                    reasoning_effort="none",
                     messages=[{"role": "user", "content": rewrite_prompt}],
                     max_tokens=settings.QUERY_REWRITE_MAX_TOKENS,
-                    temperature=0.1
+                    temperature=0.01,
                 )
             
             if response.choices and response.choices[0].message.content:
@@ -144,6 +151,7 @@ class LLMService:
             async with asyncio.timeout(settings.QUERY_REWRITE_TIMEOUT):
                 response = await self.client.chat.completions.create(
                     model=settings.QUERY_REWRITE_MODEL,
+                    reasoning_effort="none",
                     messages=[
                         {
                             "role": "system",
@@ -160,7 +168,7 @@ class LLMService:
             
             if response.choices and response.choices[0].message.content:
                 rewritten = response.choices[0].message.content.strip().strip('"').strip("'")
-                logger.info(f"📝 Query rewriting:")
+                logger.info("📝 Query rewriting:")
                 logger.info(f"   Original:  '{query}'")
                 logger.info(f"   Rewritten: '{rewritten}'")
                 return rewritten
@@ -188,6 +196,7 @@ class LLMService:
         try:
             response = await self.client.chat.completions.create(
                 model=settings.LLM_MODEL,
+                reasoning_effort="none",
                 messages=messages, # type: ignore
                 max_tokens=settings.MAX_TOKENS,
                 temperature=temperature or settings.TEMPERATURE,
@@ -218,6 +227,7 @@ class LLMService:
       
             response = await self.client.chat.completions.create(
                 model=settings.SUMMARY_MODEL,
+                reasoning_effort="none",
                 messages=messages, # type: ignore
                 max_tokens=settings.SUMMARY_MAX_TOKENS,
                 temperature=0.3,

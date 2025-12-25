@@ -48,7 +48,7 @@ services:
       LANGFUSE_DEBUG: false
 
       DB_HOST: localhost
-      DB_PORT: 5433
+      DB_PORT: 5432
       DB_NAME: rag_database
       DB_USER: postgres
       DB_PASSWORD: admin

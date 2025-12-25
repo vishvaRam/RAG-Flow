@@ -33,10 +33,9 @@ class RAGService:
             return "No relevant context found."
         
         return "\n\n".join([
-            f"[Document {i}]\n"
-            f"Subject: {doc['subject']} | Topic: {doc['topic']}\n"
-            f"Source: {doc['chunk_id']}\n"
-            f"Content: {doc['text']}"
+            f'<document id="{i}">\n'
+            f" {doc['text']}"
+            f'\n</document>\n\n'
             for i, doc in enumerate(documents, 1)
         ])
     
@@ -45,22 +44,20 @@ class RAGService:
         """Create RAG prompt"""
         return f"""You are a JEE tutor. Answer using ONLY the context provided.
 
-            Context:
+            <retrieved_context>
             {context}
+            </retrieved_context>
 
-            Question: {query}
+            <question>
+            {query}
+            </question>
 
-            Format your answer in markdown:
-            - Use ## headers for sections
-            - Use **bold** for key terms
-            - Use $ for inline math (e.g., $F=ma$) and $$ for display equations
-            - Show step-by-step: **Given** → **Formula** → **Solution** → **Answer**
-            - Use SI units and JEE notation
-
-            If context is insufficient, say "I don't have enough information to answer this."
-
-            Answer:"""
-            
+           <instructions>
+            - Answer ONLY using information from the retrieved context above
+            - If the context lacks relevant information, state: "I don't have enough information to answer this"
+            - Do NOT mention documents, sources, or where information came from
+            - Explain concepts as if from your own knowledge
+            </instructions>\n\n"""            
             
     async def process_query(
         self,

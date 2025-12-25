@@ -319,9 +319,6 @@ def build_context(documents: List[Dict[str, Any]]) -> str:
     context_parts = []
     for i, doc in enumerate(documents, 1):
         context_parts.append(
-            f"[Document {i}]\n"
-            f"Subject: {doc['subject']} | Topic: {doc['topic']}\n"
-            f"Source: {doc['chunk_id']}\n"
             f"Content: {doc['text']}\n"
         )
     return "\n\n".join(context_parts)
