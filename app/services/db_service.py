@@ -42,6 +42,8 @@ class PostgreSQLService:
         database: str = "rag_database",
         user: str = "postgres",
         password: str = "admin",
+        summary_table: str = "chat_session_summaries",
+        history_table: str = "chat_messages_history",
         min_connections: int = 2,
         max_connections: int = 10
     ):
@@ -65,6 +67,8 @@ class PostgreSQLService:
         self.password = password
         self.min_connections = min_connections
         self.max_connections = max_connections
+        self.summary_table = summary_table
+        self.history_table = history_table
         self.pool: Optional[asyncpg.Pool] = None
         self._initializing = False
     
@@ -154,8 +158,8 @@ class PostgreSQLService:
         if message_id is None:
             message_id = generate_message_id()
             
-        query = """
-        INSERT INTO chat_messages_history 
+        query = f"""
+        INSERT INTO {self.history_table} 
         (id, session_id, sender_id, sender_type, message, created_at)
         VALUES ($1, $2, $3, $4, $5, EXTRACT(EPOCH FROM NOW())::bigint)
         RETURNING id, session_id, sender_id, sender_type, message, 
@@ -193,8 +197,8 @@ class PostgreSQLService:
         if message_id is None:
             message_id = generate_message_id()
             
-        query = """
-        INSERT INTO chat_messages_history 
+        query = f"""
+        INSERT INTO {self.history_table} 
         (id, session_id, sender_id, sender_type, message, created_at)
         VALUES ($1, $2, $3, 'user', $4, EXTRACT(EPOCH FROM NOW())::bigint)
         RETURNING id, session_id, sender_id, sender_type, message, 
@@ -230,9 +234,9 @@ class PostgreSQLService:
         """
         if message_id is None:
             message_id = generate_message_id()
-            
-        query = """
-        INSERT INTO chat_messages_history 
+
+        query = f"""
+        INSERT INTO {self.history_table} 
         (id, session_id, sender_id, sender_type, message, created_at)
         VALUES ($1, $2, $3, 'assistant', $4, EXTRACT(EPOCH FROM NOW())::bigint)
         RETURNING id, session_id, sender_id, sender_type, message, 
@@ -266,8 +270,8 @@ class PostgreSQLService:
         Returns:
             Updated ChatMessageReadDB or None if not found
         """
-        query = """
-        UPDATE chat_messages_history
+        query = f"""
+        UPDATE {self.history_table}
         SET message = $1, updated_at = EXTRACT(EPOCH FROM NOW())::bigint
         WHERE id = $2 AND deleted_at IS NULL
         RETURNING id, session_id, sender_id, sender_type, message, 
@@ -293,8 +297,8 @@ class PostgreSQLService:
         Returns:
             True if deleted, False if not found
         """
-        query = """
-        UPDATE chat_messages_history
+        query = f"""
+        UPDATE {self.history_table}
         SET deleted_at = EXTRACT(EPOCH FROM NOW())::bigint
         WHERE id = $1 AND deleted_at IS NULL
         """
@@ -316,10 +320,10 @@ class PostgreSQLService:
         Returns:
             ChatMessageReadDB or None if not found
         """
-        query = """
+        query = f"""
         SELECT id, session_id, sender_id, sender_type, message, 
                created_at, updated_at, deleted_at
-        FROM chat_messages_history
+        FROM {self.history_table}
         WHERE id = $1
         """
         
@@ -344,10 +348,10 @@ class PostgreSQLService:
         Returns:
             List of ChatMessageReadDB objects
         """
-        query = """
+        query = f"""
         SELECT id, session_id, sender_id, sender_type, message, 
                created_at, updated_at, deleted_at
-        FROM chat_messages_history
+        FROM {self.history_table}
         WHERE session_id = $1 AND deleted_at IS NULL
         ORDER BY created_at DESC
         LIMIT $2 OFFSET $3
@@ -358,9 +362,9 @@ class PostgreSQLService:
     
     async def count_session_messages(self, session_id: str) -> int:
         """Count total messages in a session."""
-        query = """
+        query = f"""
         SELECT COUNT(*) as count
-        FROM chat_messages_history
+        FROM {self.history_table}
         WHERE session_id = $1 AND deleted_at IS NULL
         """
         result = await self.execute_query(query, session_id, fetchone=True)
@@ -368,9 +372,9 @@ class PostgreSQLService:
     
     async def get_session_summary(self, session_id: str) -> Optional[SessionSummaryDB]:
         """Get the latest summary for a session."""
-        query = """
+        query = f"""
         SELECT id, session_id, summary, messages_count, created_at, updated_at
-        FROM chat_session_summaries
+        FROM {self.summary_table}
         WHERE session_id = $1
         ORDER BY created_at DESC
         LIMIT 1
@@ -386,8 +390,8 @@ class PostgreSQLService:
     ) -> SessionSummaryDB:
         """Save or update session summary."""
         summary_id = generate_message_id(14)
-        query = """
-        INSERT INTO chat_session_summaries
+        query = f"""
+        INSERT INTO {self.summary_table}
         (id, session_id, summary, messages_count, created_at)
         VALUES ($1, $2, $3, $4, EXTRACT(EPOCH FROM NOW())::bigint)
         RETURNING id, session_id, summary, messages_count, created_at, updated_at
@@ -444,6 +448,8 @@ db_service = PostgreSQLService(
     database=settings.DB_NAME,
     user=settings.DB_USER,
     password=settings.DB_PASSWORD,
+    summary_table=settings.SUMMARY_TABLE,
+    history_table=settings.HISTORY_TABLE,
     min_connections=settings.DB_MIN_CONNECTIONS,
     max_connections=settings.DB_MAX_CONNECTIONS
 )

@@ -52,6 +52,8 @@ services:
       DB_NAME: rag_database
       DB_USER: postgres
       DB_PASSWORD: admin
+      SUMMARY_TABLE: ${SUMMARY_TABLE}
+      HISTORY_TABLE: ${HISTORY_TABLE}
       DB_MIN_CONNECTIONS: 2
       DB_MAX_CONNECTIONS: 10
 

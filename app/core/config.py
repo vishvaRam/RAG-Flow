@@ -67,6 +67,8 @@ class Settings(BaseSettings):
     DB_NAME: str = 'rag_database'
     DB_USER: str = 'postgres'
     DB_PASSWORD: str = 'admin'
+    SUMMARY_TABLE: str = "chat_session_summaries"
+    HISTORY_TABLE: str = "chat_messages_history"
     DB_MIN_CONNECTIONS: int = 2
     DB_MAX_CONNECTIONS: int = 10
     

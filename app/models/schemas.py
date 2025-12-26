@@ -28,8 +28,8 @@ class ChatRequestSession(BaseModel):
     stream: bool = Field(default=False, description="Enable streaming response")
     subject_filter: Optional[str] = Field(None, description="Filter by subject")
     topic_filter: Optional[str] = Field(None, description="Filter by topic")
-    top_k: Optional[int] = Field(None, description="Override top_k reranking")
-    temperature: Optional[float] = Field(None, description="Override temperature")
+    top_k: Optional[int] = Field(5, description="Override top_k reranking")
+    temperature: Optional[float] = Field(0.2, description="Override temperature")
 
 
 class SearchRequest(BaseModel):
