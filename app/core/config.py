@@ -60,6 +60,7 @@ class Settings(BaseSettings):
     LANGFUSE_SECRET_KEY: Optional[str] = None
     LANGFUSE_HOST: str = "https://cloud.langfuse.com"
     LANGFUSE_DEBUG: bool = False
+    LANGFUSE_TRACING_ENABLED: bool = True
     
     # Database Settings
     DB_HOST: str = "localhost"
