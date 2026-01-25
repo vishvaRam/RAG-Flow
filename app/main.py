@@ -13,18 +13,31 @@ from langfuse import get_client
 
 settings = get_settings()
 
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Startup and shutdown events"""
     logger.info(f"Starting {settings.APP_NAME} v{settings.APP_VERSION}")
-    
+
     # Health check
     es_health = await search_service.health_check()
-    logger.info(f"✓ Elasticsearch: {es_health['status']} ({es_health.get('document_count', 0)} documents)")
+    logger.info(
+        f"✓ Elasticsearch: {es_health['status']} ({es_health.get('document_count', 0)} documents)"
+    )
 
     # Initialize DB connections
     await db_service._ensure_pool()
     logger.info("✓ Database connection pool established")
+    # Load both prompts
+    system_prompt = await db_service.get_prompt("jee_system_prompt")
+    context_prompt = await db_service.get_prompt("jee_context_prompt")
+
+    if system_prompt:
+        settings.JEE_SYSTEM_PROMPT = system_prompt
+        logger.info("✓ Loaded JEE_SYSTEM_PROMPT from database")
+    if context_prompt:
+        settings.JEE_CONTEXT_PROMPT = context_prompt
+        logger.info("✓ Loaded JEE_CONTEXT_PROMPT from database")
 
     logger.info("✓ Service started and ready to accept requests")
     yield
@@ -36,17 +49,16 @@ async def lifespan(app: FastAPI):
         logger.info("✅ Langfuse shutdown complete")
         await db_service.close_all_connections()
         logger.info("✅ Database connections closed")
-        
+
     except Exception as e:
         logger.error(f"Error during Langfuse shutdown: {e}")
-
 
 
 app = FastAPI(
     title=settings.APP_NAME,
     version=settings.APP_VERSION,
     description="RAG system with Elasticsearch hybrid search and CrossEncoder reranking",
-    lifespan=lifespan
+    lifespan=lifespan,
 )
 
 # CORS middleware
@@ -58,6 +70,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
 # Request logging middleware
 @app.middleware("http")
 async def log_requests(request: Request, call_next):
@@ -65,9 +78,12 @@ async def log_requests(request: Request, call_next):
     logger.info(f"🔵 {request.method} {request.url.path}")
     response = await call_next(request)
     duration = (time.time() - start) * 1000
-    logger.info(f"🟢 {request.method} {request.url.path} - {response.status_code} - {duration:.2f}ms")
+    logger.info(
+        f"🟢 {request.method} {request.url.path} - {response.status_code} - {duration:.2f}ms"
+    )
     response.headers["X-Process-Time"] = f"{duration:.2f}ms"
     return response
+
 
 # Include routers
 app.include_router(health.router, tags=["Health"])
@@ -88,16 +104,17 @@ async def root():
             "/chat": "Chat with RAG",
             "/search": "Search documents",
             "/health": "Health check",
-            "/docs": "API documentation"
-        }
+            "/docs": "API documentation",
+        },
     }
 
 
 if __name__ == "__main__":
     import uvicorn
+
     uvicorn.run(
         app,
         host=settings.API_HOST,
         port=settings.API_PORT,
-        log_level=settings.LOG_LEVEL.lower()
+        log_level=settings.LOG_LEVEL.lower(),
     )

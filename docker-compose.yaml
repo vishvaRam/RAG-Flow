@@ -64,6 +64,8 @@ services:
 
       RAG_PORT: 4545
       RAG_GUNICORN_WORKERS: 2
+
+      PYTHONDONTWRITEBYTECODE: 1
     
     ipc: host
     ulimits:

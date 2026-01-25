@@ -12,14 +12,14 @@ settings = get_settings()
 
 class EmbeddingService:
     """Service for generating embeddings"""
-    
+
     def __init__(self):
         self.model = GoogleGenerativeAIEmbeddings(
             model=settings.EMBEDDING_MODEL,
-            google_api_key=settings.LLM_API_KEY, # type: ignore
+            google_api_key=settings.LLM_API_KEY,  # type: ignore
         )
         logger.info(f"✓ Embedding model loaded: {settings.EMBEDDING_MODEL}")
-    
+
     @observe()
     @log_time("Embedding generation")
     async def generate_embedding(self, text: str) -> List[float]:
@@ -29,7 +29,7 @@ class EmbeddingService:
                 self.model.embed_query,
                 text,
                 output_dimensionality=settings.EMBEDDING_DIMS,
-                task_type="retrieval_query"
+                task_type="retrieval_query",
             )
             logger.info(f"📊 Generated {len(embedding)}-dimensional embedding")
             return embedding

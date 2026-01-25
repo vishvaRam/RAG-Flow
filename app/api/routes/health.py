@@ -1,5 +1,5 @@
 from fastapi import APIRouter
-from app.services.search_service import SearchService, search_service
+from app.services.search_service import search_service
 from app.core.config import get_settings
 
 settings = get_settings()
@@ -19,6 +19,6 @@ async def health_check():
         "config": {
             "query_rewriting": settings.ENABLE_QUERY_REWRITING,
             "top_k_retrieval": settings.TOP_K_RETRIEVAL,
-            "top_k_rerank": settings.TOP_K_RERANK
-        }
+            "top_k_rerank": settings.TOP_K_RERANK,
+        },
     }

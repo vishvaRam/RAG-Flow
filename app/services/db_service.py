@@ -15,26 +15,27 @@ from app.models.schemas import (
 
 settings = get_settings()
 
+
 def generate_message_id(length: int = 14) -> str:
     """
     Generate a cryptographically secure random string ID.
-    
+
     Args:
         length: Length of the ID string (default: 14)
-        
+
     Returns:
         Random alphanumeric string
     """
     # Use uppercase letters and digits for better readability
     alphabet = string.ascii_uppercase + string.digits
-    return ''.join(secrets.choice(alphabet) for _ in range(length))
+    return "".join(secrets.choice(alphabet) for _ in range(length))
 
 
 class PostgreSQLService:
     """
     Async PostgreSQL database service with connection pooling for RAG applications.
     """
-    
+
     def __init__(
         self,
         host: str = "localhost",
@@ -45,12 +46,12 @@ class PostgreSQLService:
         summary_table: str = "chat_session_summaries",
         history_table: str = "chat_messages_history",
         min_connections: int = 2,
-        max_connections: int = 10
+        max_connections: int = 10,
     ):
         """
         Initialize PostgreSQL connection pool parameters.
         Pool will be created lazily on first use.
-        
+
         Args:
             host: Database host
             port: Database port
@@ -71,7 +72,7 @@ class PostgreSQLService:
         self.history_table = history_table
         self.pool: Optional[asyncpg.Pool] = None
         self._initializing = False
-    
+
     async def _ensure_pool(self):
         """Ensure connection pool is initialized (lazy initialization)"""
         if self.pool is None and not self._initializing:
@@ -85,7 +86,7 @@ class PostgreSQLService:
                     password=self.password,
                     min_size=self.min_connections,
                     max_size=self.max_connections,
-                    command_timeout=60
+                    command_timeout=60,
                 )
                 print("✓ PostgreSQL connection pool created successfully")
             except Exception as error:
@@ -94,7 +95,7 @@ class PostgreSQLService:
                 raise
             finally:
                 self._initializing = False
-    
+
     @asynccontextmanager
     async def acquire_connection(self):
         """
@@ -102,29 +103,25 @@ class PostgreSQLService:
         Automatically returns connection to pool after use.
         """
         await self._ensure_pool()
-        
-        connection = await self.pool.acquire() # type: ignore
+
+        connection = await self.pool.acquire()  # type: ignore
         try:
             yield connection
         finally:
-            await self.pool.release(connection) # type: ignore
-    
+            await self.pool.release(connection)  # type: ignore
+
     async def execute_query(
-        self, 
-        query: str, 
-        *args,
-        fetch: bool = True,
-        fetchone: bool = False
+        self, query: str, *args, fetch: bool = True, fetchone: bool = False
     ) -> Optional[List[Dict[str, Any]]]:
         """
         Execute a SQL query asynchronously.
-        
+
         Args:
             query: SQL query string
             *args: Query parameters
             fetch: Whether to fetch all results
             fetchone: Whether to fetch single result
-            
+
         Returns:
             Query results if fetch=True, None otherwise
         """
@@ -141,23 +138,21 @@ class PostgreSQLService:
 
     @observe()
     async def insert_chat_message(
-        self, 
-        message: ChatMessageCreateDB,
-        message_id: Optional[str] = None
+        self, message: ChatMessageCreateDB, message_id: Optional[str] = None
     ) -> ChatMessageReadDB:
         """
         Insert a new chat message into the database.
-        
+
         Args:
             message: ChatMessageCreateDB Pydantic model
             message_id: Optional custom message ID (generates one if not provided)
-            
+
         Returns:
             ChatMessageReadDB with created message data
         """
         if message_id is None:
             message_id = generate_message_id()
-            
+
         query = f"""
         INSERT INTO {self.history_table} 
         (id, session_id, sender_id, sender_type, message, created_at)
@@ -165,7 +160,7 @@ class PostgreSQLService:
         RETURNING id, session_id, sender_id, sender_type, message, 
                   created_at, updated_at, deleted_at
         """
-        
+
         result = await self.execute_query(
             query,
             message_id,
@@ -173,30 +168,28 @@ class PostgreSQLService:
             message.sender_id,
             message.sender_type,
             message.message,
-            fetchone=True
+            fetchone=True,
         )
 
-        return ChatMessageReadDB(**result) # type: ignore
+        return ChatMessageReadDB(**result)  # type: ignore
 
     @observe()
     async def insert_user_message(
-        self,
-        message: UserMessageCreateDB,
-        message_id: Optional[str] = None
+        self, message: UserMessageCreateDB, message_id: Optional[str] = None
     ) -> ChatMessageReadDB:
         """
         Insert a user message into the database.
-        
+
         Args:
             message: UserMessageCreateDB Pydantic model
             message_id: Optional custom message ID (generates one if not provided)
-            
+
         Returns:
             ChatMessageReadDB with created message data
         """
         if message_id is None:
             message_id = generate_message_id()
-            
+
         query = f"""
         INSERT INTO {self.history_table} 
         (id, session_id, sender_id, sender_type, message, created_at)
@@ -204,31 +197,29 @@ class PostgreSQLService:
         RETURNING id, session_id, sender_id, sender_type, message, 
                   created_at, updated_at, deleted_at
         """
-        
+
         result = await self.execute_query(
             query,
             message_id,
             message.session_id,
             message.sender_id,
             message.message,
-            fetchone=True
+            fetchone=True,
         )
 
-        return ChatMessageReadDB(**result) # type: ignore
+        return ChatMessageReadDB(**result)  # type: ignore
 
     @observe()
     async def insert_assistant_message(
-        self,
-        message: AssistantMessageCreateDB,
-        message_id: Optional[str] = None
+        self, message: AssistantMessageCreateDB, message_id: Optional[str] = None
     ) -> ChatMessageReadDB:
         """
         Insert an assistant message into the database.
-        
+
         Args:
             message: AssistantMessageCreateDB Pydantic model
             message_id: Optional custom message ID (generates one if not provided)
-            
+
         Returns:
             ChatMessageReadDB with created message data
         """
@@ -242,31 +233,29 @@ class PostgreSQLService:
         RETURNING id, session_id, sender_id, sender_type, message, 
                   created_at, updated_at, deleted_at
         """
-        
+
         result = await self.execute_query(
             query,
             message_id,
             message.session_id,
             message.sender_id,
             message.message,
-            fetchone=True
+            fetchone=True,
         )
 
-        return ChatMessageReadDB(**result) # type: ignore
+        return ChatMessageReadDB(**result)  # type: ignore
 
     @observe()
     async def update_chat_message(
-        self, 
-        message_id: str, 
-        new_message: str
+        self, message_id: str, new_message: str
     ) -> Optional[ChatMessageReadDB]:
         """
         Update an existing chat message.
-        
+
         Args:
             message_id: Message ID to update (string)
             new_message: New message content
-            
+
         Returns:
             Updated ChatMessageReadDB or None if not found
         """
@@ -277,23 +266,18 @@ class PostgreSQLService:
         RETURNING id, session_id, sender_id, sender_type, message, 
                   created_at, updated_at, deleted_at
         """
-        
-        result = await self.execute_query(
-            query, 
-            new_message, 
-            message_id, 
-            fetchone=True
-        )
-        return ChatMessageReadDB(**result) if result else None # type: ignore
+
+        result = await self.execute_query(query, new_message, message_id, fetchone=True)
+        return ChatMessageReadDB(**result) if result else None  # type: ignore
 
     @observe()
     async def soft_delete_message(self, message_id: str) -> bool:
         """
         Soft delete a chat message.
-        
+
         Args:
             message_id: Message ID to delete (string)
-            
+
         Returns:
             True if deleted, False if not found
         """
@@ -302,21 +286,18 @@ class PostgreSQLService:
         SET deleted_at = EXTRACT(EPOCH FROM NOW())::bigint
         WHERE id = $1 AND deleted_at IS NULL
         """
-        
+
         await self.execute_query(query, message_id, fetch=False)
         return True
 
     @observe()
-    async def get_message_by_id(
-        self, 
-        message_id: str
-    ) -> Optional[ChatMessageReadDB]:
+    async def get_message_by_id(self, message_id: str) -> Optional[ChatMessageReadDB]:
         """
         Get a specific message by ID.
-        
+
         Args:
             message_id: Message ID (string)
-            
+
         Returns:
             ChatMessageReadDB or None if not found
         """
@@ -326,25 +307,22 @@ class PostgreSQLService:
         FROM {self.history_table}
         WHERE id = $1
         """
-        
+
         result = await self.execute_query(query, message_id, fetchone=True)
-        return ChatMessageReadDB(**result) if result else None # type: ignore
-    
+        return ChatMessageReadDB(**result) if result else None  # type: ignore
+
     @observe()
     async def get_chat_history(
-        self, 
-        session_id: str, 
-        limit: Optional[int] = 50,
-        offset: Optional[int] = 0
+        self, session_id: str, limit: Optional[int] = 50, offset: Optional[int] = 0
     ) -> List[ChatMessageReadDB]:
         """
         Retrieve chat history for a session.
-        
+
         Args:
             session_id: Session identifier
             limit: Maximum number of messages to retrieve
             offset: Number of messages to skip
-            
+
         Returns:
             List of ChatMessageReadDB objects
         """
@@ -356,10 +334,10 @@ class PostgreSQLService:
         ORDER BY created_at DESC
         LIMIT $2 OFFSET $3
         """
-        
+
         results = await self.execute_query(query, session_id, limit, offset)
-        return [ChatMessageReadDB(**row) for row in results] # type: ignore
-    
+        return [ChatMessageReadDB(**row) for row in results]  # type: ignore
+
     async def count_session_messages(self, session_id: str) -> int:
         """Count total messages in a session."""
         query = f"""
@@ -368,8 +346,8 @@ class PostgreSQLService:
         WHERE session_id = $1 AND deleted_at IS NULL
         """
         result = await self.execute_query(query, session_id, fetchone=True)
-        return result['count'] if result else 0 # type: ignore
-    
+        return result["count"] if result else 0  # type: ignore
+
     async def get_session_summary(self, session_id: str) -> Optional[SessionSummaryDB]:
         """Get the latest summary for a session."""
         query = f"""
@@ -380,13 +358,10 @@ class PostgreSQLService:
         LIMIT 1
         """
         result = await self.execute_query(query, session_id, fetchone=True)
-        return SessionSummaryDB(**result) if result else None # type: ignore
-    
+        return SessionSummaryDB(**result) if result else None  # type: ignore
+
     async def save_session_summary(
-        self,
-        session_id: str,
-        summary: str,
-        messages_count: int
+        self, session_id: str, summary: str, messages_count: int
     ) -> SessionSummaryDB:
         """Save or update session summary."""
         summary_id = generate_message_id(14)
@@ -397,48 +372,52 @@ class PostgreSQLService:
         RETURNING id, session_id, summary, messages_count, created_at, updated_at
         """
         result = await self.execute_query(
-            query,
-            summary_id,
-            session_id,
-            summary,
-            messages_count,
-            fetchone=True
+            query, summary_id, session_id, summary, messages_count, fetchone=True
         )
-        return SessionSummaryDB(**result) # type: ignore
-    
+        return SessionSummaryDB(**result)  # type: ignore
+
     async def get_conversation_context(
-        self,
-        session_id: str,
-        window_size: int = 10
+        self, session_id: str, window_size: int = 10
     ) -> Tuple[Optional[str], List[ChatMessageReadDB], int]:
         """
         Get conversation context with summary and recent messages.
-        
+
         Args:
             session_id: Session identifier
             window_size: Number of recent messages to retrieve in full
-            
+
         Returns:
             Tuple of (summary, recent_messages, total_count)
         """
         # Get total message count
         total_count = await self.count_session_messages(session_id)
-        
+
         # Get recent messages
         recent_messages = await self.get_chat_history(session_id, limit=window_size)
         recent_messages.reverse()  # Chronological order
-        
+
         # Get summary if exists
         summary_obj = await self.get_session_summary(session_id)
         summary = summary_obj.summary if summary_obj else None
-        
+
         return summary, recent_messages, total_count
-    
+
     async def close_all_connections(self):
         """Close all connections in the pool."""
         if self.pool:
             await self.pool.close()
             print("✓ All PostgreSQL connections closed")
+
+    async def get_prompt(self, prompt_key: str) -> Optional[str]:
+        """
+        Fetch a system prompt by its unique key from the 'prompts' table.
+        """
+        query = "SELECT content FROM prompts WHERE key = $1"
+
+        # Execute query using your existing helper method
+        result = await self.execute_query(query, prompt_key, fetchone=True)
+
+        return result["content"] if result else None
 
 
 # Module-level singleton instance
@@ -451,5 +430,5 @@ db_service = PostgreSQLService(
     summary_table=settings.SUMMARY_TABLE,
     history_table=settings.HISTORY_TABLE,
     min_connections=settings.DB_MIN_CONNECTIONS,
-    max_connections=settings.DB_MAX_CONNECTIONS
+    max_connections=settings.DB_MAX_CONNECTIONS,
 )

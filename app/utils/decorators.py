@@ -1,11 +1,11 @@
 import time
-import asyncio
 from functools import wraps
 from app.core.logging import logger
 
 
 def log_time(operation_name: str):
     """Decorator to log execution time"""
+
     def decorator(func):
         @wraps(func)
         async def wrapper(*args, **kwargs):
@@ -19,5 +19,7 @@ def log_time(operation_name: str):
                 duration = (time.time() - start) * 1000
                 logger.error(f"⏱️  {operation_name} failed after {duration:.2f}ms: {e}")
                 raise
+
         return wrapper
+
     return decorator
