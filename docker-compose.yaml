@@ -47,11 +47,11 @@ services:
       LANGFUSE_HOST: http://localhost:3000
       LANGFUSE_DEBUG: false
 
-      DB_HOST: localhost
+      DB_HOST: ${DB_HOST}
       DB_PORT: 5432
-      DB_NAME: rag_database
-      DB_USER: postgres
-      DB_PASSWORD: admin
+      DB_NAME: ${DB_NAME}
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
       SUMMARY_TABLE: ${SUMMARY_TABLE}
       HISTORY_TABLE: ${HISTORY_TABLE}
       DB_MIN_CONNECTIONS: 2
