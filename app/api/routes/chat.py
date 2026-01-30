@@ -275,7 +275,8 @@ async def chat_endpoint_with_history(
                         if chunk.choices[0].delta.content:
                             content = chunk.choices[0].delta.content
                             full_response += content
-                            yield json.dumps({"content": content}) + "\n"
+                            # yield json.dumps({"content": content}) + "\n"
+                            yield content
                             await asyncio.sleep(0)
 
                     duration = (time.time() - start) * 1000
@@ -303,54 +304,54 @@ async def chat_endpoint_with_history(
                         )
 
                     # Send metadata
-                    yield (
-                        json.dumps(
-                            {
-                                "sources": [
-                                    {
-                                        "chunk_id": doc["chunk_id"],
-                                        "subject": doc["subject"],
-                                        "topic": doc["topic"],
-                                    }
-                                    for doc in reranked
-                                ]
-                            }
-                        )
-                        + "\n"
-                    )
+                    # yield (
+                    #     json.dumps(
+                    #         {
+                    #             "sources": [
+                    #                 {
+                    #                     "chunk_id": doc["chunk_id"],
+                    #                     "subject": doc["subject"],
+                    #                     "topic": doc["topic"],
+                    #                 }
+                    #                 for doc in reranked
+                    #             ]
+                    #         }
+                    #     )
+                    #     + "\n"
+                    # )
 
-                    if usage_data:
-                        yield (
-                            json.dumps(
-                                {
-                                    "usage": {
-                                        "prompt_tokens": usage_data.prompt_tokens,
-                                        "completion_tokens": usage_data.completion_tokens,
-                                        "total_tokens": usage_data.total_tokens,
-                                    }
-                                }
-                            )
-                            + "\n"
-                        )
+                    # if usage_data:
+                    #     yield (
+                    #         json.dumps(
+                    #             {
+                    #                 "usage": {
+                    #                     "prompt_tokens": usage_data.prompt_tokens,
+                    #                     "completion_tokens": usage_data.completion_tokens,
+                    #                     "total_tokens": usage_data.total_tokens,
+                    #                 }
+                    #             }
+                    #         )
+                    #         + "\n"
+                    #     )
 
-                    yield (
-                        json.dumps(
-                            {
-                                "context_info": {
-                                    "has_summary": context.summary is not None
-                                    if context
-                                    else False,
-                                    "total_messages": context.total_messages
-                                    if context
-                                    else 0,
-                                    "will_summarize": should_summarize,
-                                }
-                            }
-                        )
-                        + "\n"
-                    )
+                    # yield (
+                    #     json.dumps(
+                    #         {
+                    #             "context_info": {
+                    #                 "has_summary": context.summary is not None
+                    #                 if context
+                    #                 else False,
+                    #                 "total_messages": context.total_messages
+                    #                 if context
+                    #                 else 0,
+                    #                 "will_summarize": should_summarize,
+                    #             }
+                    #         }
+                    #     )
+                    #     + "\n"
+                    # )
 
-                    yield json.dumps({"done": True}) + "\n"
+                    # yield json.dumps({"done": True}) + "\n"
                 except Exception as e:
                     logger.error(f"Streaming error: {e}", exc_info=True)
                     yield json.dumps({"error": str(e)}) + "\n"
