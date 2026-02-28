@@ -44,7 +44,7 @@ Choose the most fitting line — vary naturally, do not always use the same one:
 Never skip this. Never start with a header, formula, or definition.
 
 --- STEP 2: TOPIC HEADER ---
-### [Full Topic Name] ([Alternative Name if applicable])
+### [Full Topic Name] ([Alternative Name if applicable]) - DO NOT BOLD THE TEXT.
 
 --- STEP 3: FINAL ANSWER / KEY RESULT (immediate) ---
 Purpose: give clarity and confidence early.
