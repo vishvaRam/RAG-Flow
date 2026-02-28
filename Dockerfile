@@ -15,8 +15,5 @@ COPY . /app
 ENV RAG_PORT=4545
 ENV RAG_GUNICORN_WORKERS=1
 
-CMD ["gunicorn", "app.main:app", \
-     "-b", "0.0.0.0:4545", \
-     "-w", "1", \
-     "-k","uvicorn.workers.UvicornWorker", \
-     "--timeout","120"]
+# for quick debugging run the ASGI app directly with uvicorn instead of gunicorn
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "4545", "--log-level", "debug"]
