@@ -1,9 +1,13 @@
 import asyncio
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Tuple
+
+import numpy as np
+from transformers import AutoTokenizer
+from optimum.onnxruntime import ORTModelForSequenceClassification
+from langchain_community.cross_encoders.base import BaseCrossEncoder
 from langchain.retrievers.document_compressors import CrossEncoderReranker
-from langchain_community.cross_encoders import HuggingFaceCrossEncoder
 from langchain_core.documents import Document
-from langfuse import observe
+from langsmith import traceable
 
 from app.core.config import get_settings
 from app.core.logging import logger
@@ -12,17 +16,41 @@ from app.utils.decorators import log_time
 settings = get_settings()
 
 
+class ONNXCrossEncoder(BaseCrossEncoder):
+    def __init__(self, model_name: str, max_length: int = 512):
+        logger.info(f"Loading ONNX cross-encoder: {model_name}")
+        self.tokenizer = AutoTokenizer.from_pretrained(model_name)
+        self.model = ORTModelForSequenceClassification.from_pretrained(
+            model_name,
+            file_name="model_O2.onnx",
+            provider="CPUExecutionProvider",
+        )
+        self.max_length = max_length
+
+    def score(self, text_pairs: List[Tuple[str, str]]) -> List[float]:
+        features = self.tokenizer(
+            text_pairs,
+            padding=True,
+            truncation=True,
+            max_length=self.max_length,
+            return_tensors="np",  # numpy instead of torch tensors
+        )
+        logits = self.model(**features).logits  # returns numpy array directly
+        scores = logits.squeeze(-1).tolist()
+        return [scores] if isinstance(scores, float) else scores
+
+
 class RerankerService:
     """Service for reranking documents"""
 
     def __init__(self):
         logger.info(f"Loading reranker: {settings.RERANKER_MODEL}")
-        cross_encoder = HuggingFaceCrossEncoder(model_name=settings.RERANKER_MODEL)
+        cross_encoder = ONNXCrossEncoder(model_name=settings.RERANKER_MODEL)
         self.reranker = CrossEncoderReranker(
             model=cross_encoder, top_n=settings.TOP_K_RERANK
         )
 
-    @observe()
+    @traceable
     @log_time("Reranking")
     async def rerank(
         self, query: str, documents: List[Dict[str, Any]], top_k: int = 5

@@ -6,6 +6,8 @@ from app.services.llm_service import LLMService, llm_service
 from app.services.db_service import PostgreSQLService, db_service
 from app.core.config import get_settings
 from app.utils.prompts import JEE_CONTEXT_PROMPT
+from langsmith import traceable
+
 
 settings = get_settings()
 
@@ -51,6 +53,7 @@ class RAGService:
             # Fallback to default prompt if formatting fails
             return JEE_CONTEXT_PROMPT.format(query=query, context=context)
 
+    @traceable
     async def process_query(
         self,
         rewritten_query: str,

@@ -9,8 +9,6 @@ from app.api.routes import chat, search, health
 from app.services.search_service import search_service
 from app.services.db_service import db_service
 
-from langfuse import get_client
-
 settings = get_settings()
 
 
@@ -44,14 +42,11 @@ async def lifespan(app: FastAPI):
 
     logger.info("✓ Service stopped")
     try:
-        langfuse = get_client()
-        langfuse.shutdown()
-        logger.info("✅ Langfuse shutdown complete")
         await db_service.close_all_connections()
         logger.info("✅ Database connections closed")
 
     except Exception as e:
-        logger.error(f"Error during Langfuse shutdown: {e}")
+        logger.error(f"Error during Database shutdown: {e}")
 
 
 app = FastAPI(

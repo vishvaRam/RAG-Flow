@@ -3,7 +3,7 @@ import string
 from typing import Optional, List, Dict, Any, Tuple
 from contextlib import asynccontextmanager
 import asyncpg
-from langfuse import observe
+
 from app.core.config import get_settings
 from app.models.schemas import (
     ChatMessageCreateDB,
@@ -136,7 +136,6 @@ class PostgreSQLService:
                 await conn.execute(query, *args)
                 return None
 
-    @observe()
     async def insert_chat_message(
         self, message: ChatMessageCreateDB, message_id: Optional[str] = None
     ) -> ChatMessageReadDB:
@@ -173,7 +172,6 @@ class PostgreSQLService:
 
         return ChatMessageReadDB(**result)  # type: ignore
 
-    @observe()
     async def insert_user_message(
         self, message: UserMessageCreateDB, message_id: Optional[str] = None
     ) -> ChatMessageReadDB:
@@ -209,7 +207,6 @@ class PostgreSQLService:
 
         return ChatMessageReadDB(**result)  # type: ignore
 
-    @observe()
     async def insert_assistant_message(
         self, message: AssistantMessageCreateDB, message_id: Optional[str] = None
     ) -> ChatMessageReadDB:
@@ -245,7 +242,6 @@ class PostgreSQLService:
 
         return ChatMessageReadDB(**result)  # type: ignore
 
-    @observe()
     async def update_chat_message(
         self, message_id: str, new_message: str
     ) -> Optional[ChatMessageReadDB]:
@@ -270,7 +266,6 @@ class PostgreSQLService:
         result = await self.execute_query(query, new_message, message_id, fetchone=True)
         return ChatMessageReadDB(**result) if result else None  # type: ignore
 
-    @observe()
     async def soft_delete_message(self, message_id: str) -> bool:
         """
         Soft delete a chat message.
@@ -290,7 +285,6 @@ class PostgreSQLService:
         await self.execute_query(query, message_id, fetch=False)
         return True
 
-    @observe()
     async def get_message_by_id(self, message_id: str) -> Optional[ChatMessageReadDB]:
         """
         Get a specific message by ID.
@@ -311,7 +305,6 @@ class PostgreSQLService:
         result = await self.execute_query(query, message_id, fetchone=True)
         return ChatMessageReadDB(**result) if result else None  # type: ignore
 
-    @observe()
     async def get_chat_history(
         self, session_id: str, limit: Optional[int] = 50, offset: Optional[int] = 0
     ) -> List[ChatMessageReadDB]:

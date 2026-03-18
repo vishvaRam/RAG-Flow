@@ -1,8 +1,8 @@
 import asyncio
 from typing import List, Dict, Optional
-from langfuse.openai import AsyncOpenAI  # type: ignore
-from langfuse import observe
+from openai import AsyncOpenAI
 
+from langsmith import traceable
 from app.core.config import get_settings
 from app.core.logging import logger
 from app.models.schemas import ConversationContext
@@ -26,7 +26,7 @@ class LLMService:
             max_retries=settings.LLM_MAX_RETRIES,
         )
 
-    @observe()
+    @traceable(run_type="llm")
     @log_time("Query rewriting")
     async def rewrite_query(
         self, query: str, subject_filter: Optional[str] = None
@@ -47,7 +47,7 @@ class LLMService:
                     reasoning_effort="none",
                     messages=[{"role": "user", "content": rewrite_prompt}],
                     max_tokens=settings.QUERY_REWRITE_MAX_TOKENS,
-                    temperature=0.01,
+                    temperature=0.0,
                 )
 
             if response.choices and response.choices[0].message.content:
@@ -67,7 +67,7 @@ class LLMService:
             logger.error(f"Query rewriting failed: {e}")
             return query
 
-    @observe()
+    @traceable(run_type="llm")
     @log_time("Query rewriting with history")
     async def rewrite_query_with_history(
         self,
@@ -168,7 +168,7 @@ class LLMService:
             logger.error(f"❌ Query rewriting failed: {e}", exc_info=True)
             return query
 
-    @observe()
+    @traceable(run_type="llm")
     @log_time("LLM generation")
     async def generate(
         self,
@@ -180,7 +180,7 @@ class LLMService:
         try:
             response = await self.client.chat.completions.create(
                 model=settings.LLM_MODEL,
-                reasoning_effort="none",
+                reasoning_effort="minimal",
                 messages=messages,  # type: ignore
                 max_tokens=settings.MAX_TOKENS,
                 temperature=temperature or settings.TEMPERATURE,
@@ -192,7 +192,7 @@ class LLMService:
             logger.error(f"LLM generation failed: {e}", exc_info=True)
             raise
 
-    @observe()
+    @traceable(run_type="llm")
     @log_time("Chat summary generation")
     async def generate_summary(
         self,
@@ -219,7 +219,7 @@ class LLMService:
                 reasoning_effort="none",
                 messages=messages,  # type: ignore
                 max_tokens=settings.SUMMARY_MAX_TOKENS,
-                temperature=0.3,
+                temperature=0.4,
                 stream=False,
             )  # type: ignore
 
