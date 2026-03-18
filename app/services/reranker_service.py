@@ -1,14 +1,11 @@
 import asyncio
 from typing import List, Dict, Any, Tuple
 
-import numpy as np
 from transformers import AutoTokenizer
 from optimum.onnxruntime import ORTModelForSequenceClassification
 from langchain_community.cross_encoders.base import BaseCrossEncoder
 from langchain.retrievers.document_compressors import CrossEncoderReranker
 from langchain_core.documents import Document
-from langsmith import traceable
-
 from app.core.config import get_settings
 from app.core.logging import logger
 from app.utils.decorators import log_time
@@ -44,13 +41,16 @@ class RerankerService:
     """Service for reranking documents"""
 
     def __init__(self):
-        logger.info(f"Loading reranker: {settings.RERANKER_MODEL}")
-        cross_encoder = ONNXCrossEncoder(model_name=settings.RERANKER_MODEL)
-        self.reranker = CrossEncoderReranker(
-            model=cross_encoder, top_n=settings.TOP_K_RERANK
-        )
+        if settings.RERANKER_ENABLE:
+            logger.info(f"Loading reranker: {settings.RERANKER_MODEL}")
+            cross_encoder = ONNXCrossEncoder(model_name=settings.RERANKER_MODEL)
+            self.reranker = CrossEncoderReranker(
+                model=cross_encoder, top_n=settings.TOP_K_RERANK
+            )
+        else:
+            logger.warning("No reranker model configured, skipping reranking")
+            self.reranker = None
 
-    @traceable
     @log_time("Reranking")
     async def rerank(
         self, query: str, documents: List[Dict[str, Any]], top_k: int = 5
@@ -58,7 +58,6 @@ class RerankerService:
         """Rerank documents using CrossEncoder"""
         if not documents:
             return []
-
         try:
             langchain_docs = [
                 Document(

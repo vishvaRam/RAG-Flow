@@ -11,56 +11,6 @@ services:
       - ./:/app
     
     environment:
-      # Elasticsearch
-      ELASTICSEARCH_HOST: localhost
-      ELASTICSEARCH_PORT: 9200
-      ELASTICSEARCH_INDEX: documents
-      
-      # Gemini via OpenAI
-      LLM_PROVIDER_URL: https://generativelanguage.googleapis.com/v1beta/openai/
-      LLM_API_KEY: ${LLM_API_KEY}
-      LLM_MODEL: gemini-2.5-flash
-      EMBEDDING_MODEL: models/gemini-embedding-001
-      EMBEDDING_DIMS: 768
-
-      # Query Rewriting
-      ENABLE_QUERY_REWRITING: true
-      QUERY_REWRITE_MODEL: gemini-2.5-flash-lite
-      QUERY_REWRITE_MAX_TOKENS: 512
-      QUERY_REWRITE_TIMEOUT: 5.0
-      QUERY_REWRITE_WITH_HISTORY_COUNT: 5
-
-      # Reranker
-      RERANKER_MODEL: cross-encoder/ms-marco-MiniLM-L2-v2
-      
-      # RAG settings
-      TOP_K_RETRIEVAL: 15
-      TOP_K_RERANK: 5
-      HYBRID_ALPHA: 0.5
-      
-      # API settings
-      MAX_TOKENS: 4096
-      TEMPERATURE: 0.7
-
-      LANGFUSE_PUBLIC_KEY: pk-lf-8c348c27-426c-4417-a6b0-5a65592d8c5a
-      LANGFUSE_SECRET_KEY: sk-lf-81356934-4d1c-4176-ab3f-976110ddd4c2
-      LANGFUSE_HOST: http://localhost:3000
-      LANGFUSE_DEBUG: false
-
-      DB_HOST: ${DB_HOST}
-      DB_PORT: 5432
-      DB_NAME: ${DB_NAME}
-      DB_USER: ${DB_USER}
-      DB_PASSWORD: ${DB_PASSWORD}
-      SUMMARY_TABLE: ${SUMMARY_TABLE}
-      HISTORY_TABLE: ${HISTORY_TABLE}
-      DB_MIN_CONNECTIONS: 2
-      DB_MAX_CONNECTIONS: 10
-
-      MAX_HISTORY_MESSAGES: 10
-      SUMMARY_INTERVAL: 5  
-      SUMMARY_MODEL: gemini-2.5-flash-lite
-      SUMMARY_MAX_TOKENS: 512
 
       RAG_PORT: 4545
       RAG_GUNICORN_WORKERS: 2
