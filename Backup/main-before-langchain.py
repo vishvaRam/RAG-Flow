@@ -14,7 +14,7 @@ from functools import wraps
 
 # Langfuse imports
 from langfuse import get_client, observe
-from langfuse.openai import openai
+from openai import openai
 
 # LangChain and Utils
 from langchain_google_genai import GoogleGenerativeAIEmbeddings
@@ -173,7 +173,7 @@ async def log_request_time(request: Request, call_next):
 
 
 # Helper functions with timing and observability
-@observe()
+
 @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10))
 @log_time("Embedding generation (query)")
 async def get_embedding(text: str, task_type: str = "retrieval_query") -> List[float]:
@@ -200,7 +200,7 @@ async def get_embedding(text: str, task_type: str = "retrieval_query") -> List[f
         raise
 
 
-@observe()
+
 @log_time("Elasticsearch hybrid search")
 async def hybrid_search(
     query: str,
@@ -277,7 +277,7 @@ async def hybrid_search(
         raise
 
 
-@observe()
+
 @log_time("Document reranking")
 async def rerank_documents(query: str, documents: List[Dict[str, Any]], top_k: int = 5) -> List[Dict[str, Any]]:
     """Rerank documents using cross-encoder"""
@@ -417,7 +417,7 @@ async def health_check():
 
 
 @app.post("/search", response_model=SearchResponse)
-@observe()
+
 async def search_endpoint(request: SearchRequest):
     """Search documents using hybrid search and reranking"""
     try:
@@ -469,7 +469,7 @@ async def search_endpoint(request: SearchRequest):
 
 
 @app.post("/chat")
-@observe()
+
 async def chat_endpoint(request: ChatRequest):
     """Chat endpoint with RAG"""
     try:

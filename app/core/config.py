@@ -12,7 +12,7 @@ class Settings(BaseSettings):
 
     # API Settings
     APP_NAME: str = "Hybrid RAG API"
-    APP_VERSION: str = "2.0.0"
+    APP_VERSION: str = "3.0.0"
     DEBUG: bool = False
     API_HOST: str = "0.0.0.0"
     API_PORT: int = 4545
@@ -31,7 +31,7 @@ class Settings(BaseSettings):
     # Gemini/OpenAI Configuration
     LLM_PROVIDER_URL: str = "https://generativelanguage.googleapis.com/v1beta/openai/"
     LLM_API_KEY: str
-    LLM_MODEL: str = "gemini-2.5-flash"
+    LLM_MODEL: str = "gemini-3.1-flash-lite-preview"
     EMBEDDING_MODEL: str = "models/gemini-embedding-001"
     LLM_TIMEOUT: float = 20.0
     LLM_MAX_RETRIES: int = 2
@@ -58,12 +58,11 @@ class Settings(BaseSettings):
     MAX_TOKENS: int = 2048
     TEMPERATURE: float = 0.7
 
-    # Langfuse
-    LANGFUSE_PUBLIC_KEY: Optional[str] = None
-    LANGFUSE_SECRET_KEY: Optional[str] = None
-    LANGFUSE_HOST: str = "https://cloud.langfuse.com"
-    LANGFUSE_DEBUG: bool = False
-    LANGFUSE_TRACING_ENABLED: bool = True
+    # LangSmith
+    LANGSMITH_API_KEY: Optional[str] = None
+    LANGSMITH_ENDPOINT: str = "https://api.smith.langchain.com"
+    LANGSMITH_PROJECT: str = "Dream-RAG"
+    LANGSMITH_TRACING: bool = True
 
     # Database Settings
     DB_HOST: str = "localhost"
@@ -80,7 +79,7 @@ class Settings(BaseSettings):
     MAX_HISTORY_MESSAGES: int = 10
     SUMMARY_INTERVAL: int = 10
     SUMMARY_MODEL: str = "gemini-2.5-flash-lite"
-    SUMMARY_MAX_TOKENS: int = 512
+    SUMMARY_MAX_TOKENS: int = 1042
 
     # Logging
     LOG_LEVEL: str = "INFO"

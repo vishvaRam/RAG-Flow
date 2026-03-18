@@ -5,6 +5,7 @@ torchvision
 
 # Core ML
 sentence-transformers
+optimum[onnxruntime]
 
 # Web Framework
 fastapi
@@ -32,8 +33,7 @@ langchain-community
 langchain-google-genai
 
 # Observability
-langfuse
-uv
+langsmith
 
 # DB
 asyncpg

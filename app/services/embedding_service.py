@@ -1,7 +1,8 @@
 import asyncio
 from typing import List
 from langchain_google_genai import GoogleGenerativeAIEmbeddings
-from langfuse import observe
+from langsmith import traceable
+
 
 from app.core.config import get_settings
 from app.core.logging import logger
@@ -20,7 +21,7 @@ class EmbeddingService:
         )
         logger.info(f"✓ Embedding model loaded: {settings.EMBEDDING_MODEL}")
 
-    @observe()
+    @traceable(run_type="embedding")
     @log_time("Embedding generation")
     async def generate_embedding(self, text: str) -> List[float]:
         """Generate embedding for text"""

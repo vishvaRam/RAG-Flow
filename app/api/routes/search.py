@@ -1,17 +1,12 @@
 from fastapi import APIRouter
-from langfuse import observe, get_client
-
 from app.models.schemas import SearchRequest, SearchResponse, SearchResult
 from app.services.rag_service import rag_service
 from app.core.logging import logger
 
 router = APIRouter()
 
-langfuse = get_client()
-
 
 @router.post("/search", response_model=SearchResponse)
-@observe()
 async def search_endpoint(
     request: SearchRequest,
 ):
