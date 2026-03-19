@@ -9,12 +9,11 @@ services:
     network_mode: "host"
     volumes:
       - ./:/app
-    
+    # env_file:
+    #   - .env
     environment:
-
       RAG_PORT: 4545
       RAG_GUNICORN_WORKERS: 2
-
       PYTHONDONTWRITEBYTECODE: 1
     
     ipc: host
@@ -22,8 +21,6 @@ services:
       memlock: -1
       stack: 67108864
       
-    # networks:
-    #   - shared_app_network 
     dns:
       - 8.8.8.8
       - 8.8.4.4

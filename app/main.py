@@ -8,6 +8,7 @@ from app.core.logging import logger
 from app.api.routes import chat, search, health
 from app.services.search_service import search_service
 from app.services.db_service import db_service
+import langsmith as ls
 
 settings = get_settings()
 
@@ -22,6 +23,30 @@ async def lifespan(app: FastAPI):
     logger.info(
         f"✓ Elasticsearch: {es_health['status']} ({es_health.get('document_count', 0)} documents)"
     )
+
+    ls_client = ls.Client()
+    try:
+        projects = list(ls_client.list_projects())
+        logger.info(f"✅ LangSmith connected — {len(projects)} projects found")
+        for p in projects:
+            logger.info(f"   • {p.name}")
+    except Exception as e:
+        logger.error(f"❌ LangSmith connection failed: {e}")
+
+    # # ── DEBUG: Print all resolved settings ──────────────────────────────
+    # logger.info("=" * 60)
+    # logger.info("🔧 RESOLVED SETTINGS (from env/defaults):")
+    # for field_name, value in settings.model_dump().items():
+    #     # Mask sensitive keys
+    #     sensitive = {"LLM_API_KEY", "LANGSMITH_API_KEY", "DB_PASSWORD"}
+    #     display = (
+    #         f"{str(value)[:6]}...{str(value)[-4:]}"
+    #         if field_name in sensitive and value
+    #         else value
+    #     )
+    #     logger.info(f"   {field_name:<40} = {display}")
+    # logger.info("=" * 60)
+    # # ────────────────────────────────────────────────────────────────────
 
     # Initialize DB connections
     await db_service._ensure_pool()

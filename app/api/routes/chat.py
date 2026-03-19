@@ -20,7 +20,7 @@ from app.services.memory_service import memory_service
 settings = get_settings()
 router = APIRouter()
 
-@traceable()
+
 @router.post("/chat")
 async def chat_endpoint(
     request: ChatRequest,
@@ -168,7 +168,7 @@ async def chat_endpoint_with_history(
     with tracing_context(
         metadata={
             "user_id": request.user_id,
-            "session_id": request.session_id,   # recognized by LangSmith UI for thread grouping
+            "session_id": request.session_id,  # recognized by LangSmith UI for thread grouping
             "thread_id": request.session_id,
         }
     ):
@@ -294,7 +294,9 @@ async def chat_endpoint_with_history(
                             db_service.insert_assistant_message, assistant_msg
                         )
                     except Exception as e:
-                        logger.error(f"Error storing assistant message: {e}", exc_info=True)
+                        logger.error(
+                            f"Error storing assistant message: {e}", exc_info=True
+                        )
 
                     # Trigger summarization in background if needed
                     if should_summarize:
@@ -344,7 +346,9 @@ async def chat_endpoint_with_history(
 
             # Trigger summarization in background if needed
             if should_summarize:
-                background_tasks.add_task(llm_service.generate_summary, request.session_id)
+                background_tasks.add_task(
+                    llm_service.generate_summary, request.session_id
+                )
 
             return {
                 "answer": answer,
@@ -394,6 +398,7 @@ async def get_session_summary(session_id: str):
     except Exception as e:
         logger.error(f"Error fetching summary: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="Failed to fetch summary")
+
 
 @router.get("/chat/session/{session_id}/history")
 async def get_session_history(session_id: str, limit: int = 50):

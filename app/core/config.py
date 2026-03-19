@@ -3,6 +3,9 @@ from typing import Optional
 
 from pydantic_settings import BaseSettings
 from app.utils.prompts import JEE_CONTEXT_PROMPT, JEE_SYS_PROMPT
+from dotenv import load_dotenv
+
+load_dotenv()
 
 
 class Settings(BaseSettings):
@@ -55,7 +58,7 @@ class Settings(BaseSettings):
     # 🔄 Query Rewriting
     ############################
     ENABLE_QUERY_REWRITING: bool = True
-    QUERY_REWRITE_MODEL: str = "gemini-2.5-flash-lite"
+    QUERY_REWRITE_MODEL: str = "gemini-3.1-flash-lite-preview"
     QUERY_REWRITE_MAX_TOKENS: int = 512
     QUERY_REWRITE_TIMEOUT: float = 5.0
     QUERY_REWRITE_WITH_HISTORY_COUNT: int = 5
@@ -102,7 +105,7 @@ class Settings(BaseSettings):
     MAX_HISTORY_MESSAGES: int = 10
     SUMMARY_INTERVAL: int = 5
 
-    SUMMARY_MODEL: str = "gemini-2.5-flash-lite"
+    SUMMARY_MODEL: str = "gemini-3.1-flash-lite-preview"
     SUMMARY_MAX_TOKENS: int = 512
 
     ############################
@@ -114,6 +117,7 @@ class Settings(BaseSettings):
     class Config:
         env_file = ".env"
         case_sensitive = True
+        extra = "ignore"
 
 
 @lru_cache()
