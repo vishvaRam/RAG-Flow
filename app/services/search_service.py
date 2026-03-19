@@ -1,7 +1,6 @@
 import asyncio
 from typing import List, Dict, Optional, Any
 from elasticsearch import Elasticsearch
-from langsmith import traceable
 from app.core.config import get_settings
 from app.core.logging import logger
 from app.utils.decorators import log_time
@@ -39,7 +38,6 @@ class SearchService:
             logger.error(f"Elasticsearch health check failed: {e}")
             return {"status": "unhealthy", "error": str(e)}
 
-    @traceable
     @log_time("Hybrid search")
     async def hybrid_search(
         self,

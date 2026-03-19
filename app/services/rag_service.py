@@ -5,9 +5,7 @@ from app.services.reranker_service import RerankerService, reranker_service
 from app.services.llm_service import LLMService, llm_service
 from app.services.db_service import PostgreSQLService, db_service
 from app.core.config import get_settings
-from app.utils.prompts import JEE_CONTEXT_PROMPT
-from langsmith import traceable
-
+from string import Template
 
 settings = get_settings()
 
@@ -45,15 +43,10 @@ class RAGService:
     @staticmethod
     def create_rag_prompt(query: str, context: str) -> str:
         """Create RAG prompt using the template from DB"""
-        try:
-            # Use the template loaded into settings
-            return settings.JEE_CONTEXT_PROMPT.format(query=query, context=context)
-        except KeyError as e:
-            print(f"KeyError in formatting RAG prompt: {e}")
-            # Fallback to default prompt if formatting fails
-            return JEE_CONTEXT_PROMPT.format(query=query, context=context)
+        return Template(settings.JEE_CONTEXT_PROMPT).safe_substitute(
+                        query=query, context=context
+                    )
 
-    @traceable
     async def process_query(
         self,
         rewritten_query: str,
@@ -76,13 +69,17 @@ class RAGService:
             alpha=settings.HYBRID_ALPHA,
         )
 
-        # Step 2: Rerank
-        top_k = top_k or settings.TOP_K_RERANK
-        reranked = (
-            await self.reranker.rerank(rewritten_query, results, top_k)
-            if results
-            else []
-        )
+        # Step 3: Rerank (optional)
+        if not results:
+            return [], []
+
+        if settings.RERANKER_ENABLE:
+            top_k = top_k or settings.TOP_K_RERANK
+            reranked = await self.reranker.rerank(rewritten_query, results, top_k)
+        else:
+            # No reranking → return original results (optionally trim to top_k)
+            top_k = top_k or settings.TOP_K_RERANK
+            reranked = results[:top_k]
 
         return reranked, results
 

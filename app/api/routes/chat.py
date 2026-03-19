@@ -3,8 +3,7 @@ import time
 import asyncio
 from fastapi import APIRouter, BackgroundTasks, HTTPException
 from fastapi.responses import StreamingResponse
-from langfuse import observe, propagate_attributes
-
+from langsmith import traceable, tracing_context
 from app.models.schemas import (
     ChatRequest,
     ChatRequestSession,
@@ -23,7 +22,6 @@ router = APIRouter()
 
 
 @router.post("/chat")
-@observe()
 async def chat_endpoint(
     request: ChatRequest,
 ):
@@ -158,8 +156,8 @@ async def chat_endpoint(
         }
 
 
+@traceable()
 @router.post("/chat/session")
-@observe()
 async def chat_endpoint_with_history(
     request: ChatRequestSession, background_tasks: BackgroundTasks
 ):
@@ -167,7 +165,13 @@ async def chat_endpoint_with_history(
     Chat with RAG with session persistence and intelligent memory management.
     Uses sliding window + progressive summarization for long conversations.
     """
-    with propagate_attributes(user_id=request.user_id, session_id=request.session_id):
+    with tracing_context(
+        metadata={
+            "user_id": request.user_id,
+            "session_id": request.session_id,  # recognized by LangSmith UI for thread grouping
+            "thread_id": request.session_id,
+        }
+    ):
         user_messages = [msg for msg in request.messages if msg.role == "user"]
         if not user_messages:
             raise HTTPException(status_code=400, detail="No user message found")
@@ -268,10 +272,7 @@ async def chat_endpoint_with_history(
                         stream=True,
                     )
 
-                    usage_data = None
                     async for chunk in stream:
-                        if chunk.usage:
-                            usage_data = chunk.usage
                         if chunk.choices[0].delta.content:
                             content = chunk.choices[0].delta.content
                             full_response += content
@@ -303,55 +304,6 @@ async def chat_endpoint_with_history(
                             llm_service.generate_summary, request.session_id
                         )
 
-                    # Send metadata
-                    # yield (
-                    #     json.dumps(
-                    #         {
-                    #             "sources": [
-                    #                 {
-                    #                     "chunk_id": doc["chunk_id"],
-                    #                     "subject": doc["subject"],
-                    #                     "topic": doc["topic"],
-                    #                 }
-                    #                 for doc in reranked
-                    #             ]
-                    #         }
-                    #     )
-                    #     + "\n"
-                    # )
-
-                    # if usage_data:
-                    #     yield (
-                    #         json.dumps(
-                    #             {
-                    #                 "usage": {
-                    #                     "prompt_tokens": usage_data.prompt_tokens,
-                    #                     "completion_tokens": usage_data.completion_tokens,
-                    #                     "total_tokens": usage_data.total_tokens,
-                    #                 }
-                    #             }
-                    #         )
-                    #         + "\n"
-                    #     )
-
-                    # yield (
-                    #     json.dumps(
-                    #         {
-                    #             "context_info": {
-                    #                 "has_summary": context.summary is not None
-                    #                 if context
-                    #                 else False,
-                    #                 "total_messages": context.total_messages
-                    #                 if context
-                    #                 else 0,
-                    #                 "will_summarize": should_summarize,
-                    #             }
-                    #         }
-                    #     )
-                    #     + "\n"
-                    # )
-
-                    # yield json.dumps({"done": True}) + "\n"
                 except Exception as e:
                     logger.error(f"Streaming error: {e}", exc_info=True)
                     yield json.dumps({"error": str(e)}) + "\n"
@@ -424,7 +376,6 @@ async def chat_endpoint_with_history(
 
 
 @router.get("/chat/session/{session_id}/summary")
-@observe()
 async def get_session_summary(session_id: str):
     """Get the current summary for a session."""
     try:
@@ -450,7 +401,6 @@ async def get_session_summary(session_id: str):
 
 
 @router.get("/chat/session/{session_id}/history")
-@observe()
 async def get_session_history(session_id: str, limit: int = 50):
     """
     Retrieve chat history for a specific session.
