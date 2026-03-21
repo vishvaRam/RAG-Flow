@@ -43,9 +43,11 @@ class RAGService:
     @staticmethod
     def create_rag_prompt(query: str, context: str) -> str:
         """Create RAG prompt using the template from DB"""
-        return Template(settings.JEE_CONTEXT_PROMPT).safe_substitute(
-                        query=query, context=context
-                    )
+        return (
+            settings.JEE_CONTEXT_PROMPT
+            .replace("{context}", context)
+            .replace("{query}", query)
+        )
 
     async def process_query(
         self,
