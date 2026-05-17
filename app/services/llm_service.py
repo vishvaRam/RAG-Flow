@@ -2,7 +2,7 @@ import asyncio
 from typing import List, Dict, Optional
 from openai import AsyncOpenAI
 
-from langsmith import traceable
+from langsmith import wrappers
 from app.core.config import get_settings
 from app.core.logging import logger
 from app.models.schemas import ConversationContext
@@ -19,14 +19,13 @@ class LLMService:
     SYSTEM_MESSAGE = {"role": "system", "content": settings.JEE_SYSTEM_PROMPT}
 
     def __init__(self):
-        self.client = AsyncOpenAI(
+        self.client = wrappers.wrap_openai(AsyncOpenAI(
             api_key=settings.LLM_API_KEY,
             base_url=settings.LLM_PROVIDER_URL,
             timeout=settings.LLM_TIMEOUT,
             max_retries=settings.LLM_MAX_RETRIES,
-        )
+        ))
 
-    @traceable(run_type="llm")
     @log_time("Query rewriting")
     async def rewrite_query(
         self, query: str, subject_filter: Optional[str] = None
@@ -67,7 +66,6 @@ class LLMService:
             logger.error(f"Query rewriting failed: {e}")
             return query
 
-    @traceable(run_type="llm")
     @log_time("Query rewriting with history")
     async def rewrite_query_with_history(
         self,
@@ -168,7 +166,6 @@ class LLMService:
             logger.error(f"❌ Query rewriting failed: {e}", exc_info=True)
             return query
 
-    @traceable(run_type="llm")
     @log_time("LLM generation")
     async def generate(
         self,
@@ -192,7 +189,6 @@ class LLMService:
             logger.error(f"LLM generation failed: {e}", exc_info=True)
             raise
 
-    @traceable(run_type="llm")
     @log_time("Chat summary generation")
     async def generate_summary(
         self,
