@@ -9,6 +9,7 @@ from app.models.schemas import ConversationContext
 from app.services.db_service import db_service
 from app.utils.decorators import log_time
 from app.services.memory_service import memory_service
+from app.utils.prompts import REWRITER_PROMPT
 
 settings = get_settings()
 
@@ -116,20 +117,12 @@ class LLMService:
             summary_str = f"\nConversation summary: {context.summary[:150]}"
 
         # Build rewrite prompt
-        rewrite_prompt = f"""Rewrite this query into a better search query for semantic search and reranking:
-
-            Query: "{query}"
-            Recent conversation: {context_str or "None"}{summary_str}
-            Subject: {subject_filter or "Physics/Chemistry/Mathematics"}
-
-            Instructions:
-            - Replace pronouns (it, this, that, these) with specific nouns from conversation
-            - Add relevant technical terms and keywords
-            - Make it standalone and self-contained
-            - Keep it concise
-            - Focus on concepts for document retrieval
-
-            Output only the rewritten query:"""
+        rewrite_prompt = REWRITER_PROMPT.format(
+            query=query,
+            context_str=context_str if context_str else "None",
+            summary_str=summary_str,
+            subject_filter=subject_filter or "Physics/Chemistry/Mathematics",
+        )
 
         try:
             async with asyncio.timeout(settings.QUERY_REWRITE_TIMEOUT):

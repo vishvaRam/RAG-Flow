@@ -27,11 +27,11 @@ async def lifespan(app: FastAPI):
     ls_client = ls.Client()
     try:
         projects = list(ls_client.list_projects())
-        logger.info(f"✅ LangSmith connected — {len(projects)} projects found")
+        logger.info(f"✓ LangSmith connected — {len(projects)} projects found")
         for p in projects:
             logger.info(f"   • {p.name}")
     except Exception as e:
-        logger.error(f"❌ LangSmith connection failed: {e}")
+        logger.error(f"x LangSmith connection failed: {e}")
 
     # # ── DEBUG: Print all resolved settings ──────────────────────────────
     # logger.info("=" * 60)
@@ -68,7 +68,7 @@ async def lifespan(app: FastAPI):
     logger.info("✓ Service stopped")
     try:
         await db_service.close_all_connections()
-        logger.info("✅ Database connections closed")
+        logger.info("✓ Database connections closed")
 
     except Exception as e:
         logger.error(f"Error during Database shutdown: {e}")
@@ -99,7 +99,7 @@ async def log_requests(request: Request, call_next):
     response = await call_next(request)
     duration = (time.time() - start) * 1000
     logger.info(
-        f"🟢 {request.method} {request.url.path} - {response.status_code} - {duration:.2f}ms"
+        f" {request.method} {request.url.path} - {response.status_code} - {duration:.2f}ms"
     )
     response.headers["X-Process-Time"] = f"{duration:.2f}ms"
     return response

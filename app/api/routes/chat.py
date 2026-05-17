@@ -16,6 +16,7 @@ from app.services.llm_service import llm_service
 from app.core.config import get_settings
 from app.core.logging import logger
 from app.services.memory_service import memory_service
+from app.services.agent_service import agent_service
 
 settings = get_settings()
 router = APIRouter()
@@ -215,47 +216,25 @@ async def chat_endpoint_with_history(
             subject_filter=request.subject_filter,
         )
 
-        # Process RAG pipeline
-        reranked, _ = await rag_service.process_query(
-            rewritten_query=rewritten_query,
-            subject_filter=request.subject_filter,
-            topic_filter=request.topic_filter,
-            top_k=request.top_k,
-        )
-
-        # Build RAG context
-        rag_context = rag_service.build_context(reranked)
-
-        # ===== FIX: Build system message properly =====
-        system_content_parts = [rag_service.llm.SYSTEM_MESSAGE["content"]]
-
-        # Optionally add conversation summary to system (keep it brief!)
-        if context and context.summary:
-            system_content_parts.append(
-                f"\n\nPrevious Conversation Summary:\n{context.summary}"
-            )
-
-        unified_system_message = {
-            "role": "system",
-            "content": "\n".join(system_content_parts),
+        # =========================================================================
+        # LangGraph Router Integration replaces manual RAG & Message building
+        # =========================================================================
+        agent_payload = {
+            "query": query,
+            "rewritten_query": rewritten_query,
+            "context": context,
+            "subject_filter": request.subject_filter,
+            "topic_filter": request.topic_filter,
+            "top_k": request.top_k,
         }
 
-        conversation_messages = [unified_system_message]
+        # Run graph execution
+        graph_result = await agent_service.execute(agent_payload)
 
-        # ===== FIX: Add recent conversation history (all of them) =====
-        if context and context.recent_messages:
-            for msg in context.recent_messages:  # Include ALL recent messages
-                conversation_messages.append(
-                    {
-                        "role": "user" if msg["role"] == "user" else "assistant",
-                        "content": msg["content"],
-                    }
-                )
-
-        # ===== FIX: Proper formatting for current user message =====
-        current_user_message = rag_service.create_rag_prompt(query, rag_context)
-
-        conversation_messages.append({"role": "user", "content": current_user_message})
+        conversation_messages = graph_result["conversation_messages"]
+        reranked = graph_result["reranked_docs"]
+        selected_route = graph_result["route"]
+        # =========================================================================
 
         temperature = request.temperature or settings.TEMPERATURE
 
@@ -276,12 +255,13 @@ async def chat_endpoint_with_history(
                         if chunk.choices[0].delta.content:
                             content = chunk.choices[0].delta.content
                             full_response += content
-                            # yield json.dumps({"content": content}) + "\n"
                             yield content
                             await asyncio.sleep(0)
 
                     duration = (time.time() - start) * 1000
-                    logger.info(f"⏱️  Streaming took {duration:.2f}ms")
+                    logger.info(
+                        f"⏱️  Streaming ({selected_route}) took {duration:.2f}ms"
+                    )
 
                     # Store assistant message
                     try:
@@ -298,7 +278,6 @@ async def chat_endpoint_with_history(
                             f"Error storing assistant message: {e}", exc_info=True
                         )
 
-                    # Trigger summarization in background if needed
                     if should_summarize:
                         background_tasks.add_task(
                             llm_service.generate_summary, request.session_id
@@ -326,12 +305,11 @@ async def chat_endpoint_with_history(
             )
 
             duration = (time.time() - start) * 1000
-            logger.info(f"⏱️  LLM took {duration:.2f}ms")
+            logger.info(f"⏱️  LLM ({selected_route}) took {duration:.2f}ms")
 
             answer = response.choices[0].message.content
             logger.info(f"✅ Generated {len(answer)} characters")
 
-            # Store assistant message
             try:
                 assistant_msg = AssistantMessageCreateDB(
                     session_id=request.session_id,
@@ -344,7 +322,6 @@ async def chat_endpoint_with_history(
             except Exception as e:
                 logger.error(f"Error storing assistant message: {e}", exc_info=True)
 
-            # Trigger summarization in background if needed
             if should_summarize:
                 background_tasks.add_task(
                     llm_service.generate_summary, request.session_id
@@ -353,6 +330,7 @@ async def chat_endpoint_with_history(
             return {
                 "answer": answer,
                 "session_id": request.session_id,
+                "route_taken": selected_route,
                 "context_info": {
                     "has_summary": context.summary is not None if context else False,
                     "total_messages": context.total_messages if context else 0,

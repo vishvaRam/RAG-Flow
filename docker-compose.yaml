@@ -6,7 +6,7 @@ services:
     ports:
       # Maps host port 4545 to container port 4545
       - "4545:4545"
-    network_mode: "host"
+    # network_mode: "host"
     volumes:
       - ./:/app
     # env_file:
