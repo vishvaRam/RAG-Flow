@@ -1,9 +1,8 @@
 from functools import lru_cache
 from typing import Optional
-
 from pydantic_settings import BaseSettings
-from app.utils.prompts import JEE_CONTEXT_PROMPT, JEE_SYS_PROMPT
 from dotenv import load_dotenv
+from app.utils.prompts import JEE_CONTEXT_PROMPT, JEE_SYS_PROMPT
 
 load_dotenv()
 
@@ -14,8 +13,8 @@ class Settings(BaseSettings):
     ############################
     # 🚀 App / API Settings
     ############################
-    APP_NAME: str = "Hybrid RAG API"
-    APP_VERSION: str = "3.0.0"
+    APP_NAME: str = "LangGraph RAG API"
+    APP_VERSION: str = "4.0.0"
     DEBUG: bool = False
     API_HOST: str = "0.0.0.0"
     API_PORT: int = 4545
@@ -27,62 +26,29 @@ class Settings(BaseSettings):
     JEE_CONTEXT_PROMPT: str = JEE_CONTEXT_PROMPT
 
     ############################
-    # 🔍 Elasticsearch
-    ############################
-    ELASTICSEARCH_HOST: str = "localhost"
-    ELASTICSEARCH_PORT: int = 9200
-    ELASTICSEARCH_INDEX: str = "documents"
-    ELASTICSEARCH_TIMEOUT: int = 30
-    ELASTICSEARCH_MAX_RETRIES: int = 3
-
-    ############################
-    # 🤖 LLM Configuration
+    # 🤖 LLM Configuration (LangChain OpenAI interface with Gemini backend)
     ############################
     LLM_PROVIDER_URL: str = "https://generativelanguage.googleapis.com/v1beta/openai/"
-    LLM_API_KEY: str  # Required
-    LLM_MODEL: str = "gemini-3.1-flash-lite-preview"
-
+    LLM_API_KEY: str
+    LLM_MODEL: str = "gemini-3.5-flash-lite"
     MAX_TOKENS: int = 4096
     TEMPERATURE: float = 0.4
-
-    LLM_TIMEOUT: float = 20.0
-    LLM_MAX_RETRIES: int = 2
+    LLM_TIMEOUT: float = 30.0
 
     ############################
-    # 🔗 Embeddings
+    # 🔗 Embeddings (LangChain OpenAI interface with Gemini backend)
     ############################
-    EMBEDDING_MODEL: str = "models/gemini-embedding-001"
-    EMBEDDING_DIMS: int = 768
-
-    ############################
-    # 🔄 Query Rewriting
-    ############################
-    ENABLE_QUERY_REWRITING: bool = True
-    QUERY_REWRITE_MODEL: str = "gemini-3.1-flash-lite-preview"
-    QUERY_REWRITE_MAX_TOKENS: int = 512
-    QUERY_REWRITE_TIMEOUT: float = 5.0
-    QUERY_REWRITE_WITH_HISTORY_COUNT: int = 5
-
-    ############################
-    # 🧠 Reranker
-    ############################
-    RERANKER_ENABLE: bool = False
-    RERANKER_MODEL: str = "cross-encoder/ms-marco-MiniLM-L2-v2"
-    TOP_K_RERANK: int = 3
+    EMBEDDING_PROVIDER_URL: str = "https://generativelanguage.googleapis.com/v1beta/openai/"
+    EMBEDDING_MODEL: str = "gemini-embedding-001"
+    EMBEDDING_DIMENSIONS: int = 1024
 
     ############################
     # 📚 RAG Settings
     ############################
-    TOP_K_RETRIEVAL: int = 8
-    HYBRID_ALPHA: float = 0.5
-
-    ############################
-    # 📊 LangSmith
-    ############################
-    LANGSMITH_API_KEY: Optional[str] = None
-    LANGSMITH_ENDPOINT: str = "https://api.smith.langchain.com"
-    LANGSMITH_PROJECT: str = "Dream-RAG"
-    LANGSMITH_TRACING: bool = True
+    CHUNK_SIZE: int = 1200
+    CHUNK_OVERLAP: int = 250
+    TOP_K_RETRIEVAL: int = 6
+    COLLECTION_NAME: str = "pdf_knowledge_base"
 
     ############################
     # 🗄️ Database
@@ -92,7 +58,6 @@ class Settings(BaseSettings):
     DB_NAME: str = "rag_database"
     DB_USER: str = "postgres"
     DB_PASSWORD: str = "admin"
-
     DB_MIN_CONNECTIONS: int = 2
     DB_MAX_CONNECTIONS: int = 10
 
@@ -100,13 +65,12 @@ class Settings(BaseSettings):
     SUMMARY_TABLE: str = "chat_session_summaries"
 
     ############################
-    # 🧾 History & Summarization
+    # 📊 LangSmith
     ############################
-    MAX_HISTORY_MESSAGES: int = 10
-    SUMMARY_INTERVAL: int = 5
-
-    SUMMARY_MODEL: str = "gemini-3.1-flash-lite-preview"
-    SUMMARY_MAX_TOKENS: int = 512
+    LANGSMITH_API_KEY: str | None = None
+    LANGSMITH_ENDPOINT: str = "https://api.smith.langchain.com"
+    LANGSMITH_PROJECT: str = "LangGraph-RAG"
+    LANGSMITH_TRACING: bool = True
 
     ############################
     # 🪵 Logging

@@ -1,87 +1,18 @@
-import time
-from contextlib import asynccontextmanager
-from fastapi import FastAPI, Request
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-
+from app.api.routes import agent, documents, health, history
 from app.core.config import get_settings
 from app.core.logging import logger
-from app.api.routes import chat, search, health
-from app.services.search_service import search_service
-from app.services.db_service import db_service
-import langsmith as ls
 
 settings = get_settings()
-
-
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    """Startup and shutdown events"""
-    logger.info(f"Starting {settings.APP_NAME} v{settings.APP_VERSION}")
-
-    # Health check
-    es_health = await search_service.health_check()
-    logger.info(
-        f"✓ Elasticsearch: {es_health['status']} ({es_health.get('document_count', 0)} documents)"
-    )
-
-    ls_client = ls.Client()
-    try:
-        projects = list(ls_client.list_projects())
-        logger.info(f"✅ LangSmith connected — {len(projects)} projects found")
-        for p in projects:
-            logger.info(f"   • {p.name}")
-    except Exception as e:
-        logger.error(f"❌ LangSmith connection failed: {e}")
-
-    # # ── DEBUG: Print all resolved settings ──────────────────────────────
-    # logger.info("=" * 60)
-    # logger.info("🔧 RESOLVED SETTINGS (from env/defaults):")
-    # for field_name, value in settings.model_dump().items():
-    #     # Mask sensitive keys
-    #     sensitive = {"LLM_API_KEY", "LANGSMITH_API_KEY", "DB_PASSWORD"}
-    #     display = (
-    #         f"{str(value)[:6]}...{str(value)[-4:]}"
-    #         if field_name in sensitive and value
-    #         else value
-    #     )
-    #     logger.info(f"   {field_name:<40} = {display}")
-    # logger.info("=" * 60)
-    # # ────────────────────────────────────────────────────────────────────
-
-    # Initialize DB connections
-    await db_service._ensure_pool()
-    logger.info("✓ Database connection pool established")
-    # Load both prompts
-    system_prompt = await db_service.get_prompt("jee_system_prompt")
-    context_prompt = await db_service.get_prompt("jee_context_prompt")
-
-    if system_prompt:
-        settings.JEE_SYSTEM_PROMPT = system_prompt
-        logger.info("✓ Loaded JEE_SYSTEM_PROMPT from database")
-    if context_prompt:
-        settings.JEE_CONTEXT_PROMPT = context_prompt
-        logger.info("✓ Loaded JEE_CONTEXT_PROMPT from database")
-
-    logger.info("✓ Service started and ready to accept requests")
-    yield
-
-    logger.info("✓ Service stopped")
-    try:
-        await db_service.close_all_connections()
-        logger.info("✅ Database connections closed")
-
-    except Exception as e:
-        logger.error(f"Error during Database shutdown: {e}")
-
 
 app = FastAPI(
     title=settings.APP_NAME,
     version=settings.APP_VERSION,
-    description="RAG system with Elasticsearch hybrid search and CrossEncoder reranking",
-    lifespan=lifespan,
+    docs_url="/docs",
+    redoc_url="/redoc",
 )
 
-# CORS middleware
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -90,51 +21,19 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-
-# Request logging middleware
-@app.middleware("http")
-async def log_requests(request: Request, call_next):
-    start = time.time()
-    logger.info(f"🔵 {request.method} {request.url.path}")
-    response = await call_next(request)
-    duration = (time.time() - start) * 1000
-    logger.info(
-        f"🟢 {request.method} {request.url.path} - {response.status_code} - {duration:.2f}ms"
-    )
-    response.headers["X-Process-Time"] = f"{duration:.2f}ms"
-    return response
-
-
-# Include routers
-app.include_router(health.router, tags=["Health"])
-app.include_router(search.router, tags=["Search"])
-app.include_router(chat.router, tags=["Chat"])
-
-
-@app.get("/")
-async def root():
-    """Root endpoint"""
-    return {
-        "service": settings.APP_NAME,
-        "version": settings.APP_VERSION,
-        "model": settings.LLM_MODEL,
-        "embedding_model": settings.EMBEDDING_MODEL,
-        "reranker": settings.RERANKER_MODEL,
-        "endpoints": {
-            "/chat": "Chat with RAG",
-            "/search": "Search documents",
-            "/health": "Health check",
-            "/docs": "API documentation",
-        },
-    }
+# Route registrations
+app.include_router(health.router)
+app.include_router(agent.router)
+app.include_router(documents.router)
+app.include_router(history.router)
 
 
 if __name__ == "__main__":
     import uvicorn
 
     uvicorn.run(
-        app,
+        "app.main:app",
         host=settings.API_HOST,
         port=settings.API_PORT,
-        log_level=settings.LOG_LEVEL.lower(),
+        reload=settings.DEBUG,
     )

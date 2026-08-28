@@ -7,33 +7,30 @@ torchvision
 sentence-transformers
 optimum[onnxruntime]
 
-# Web Framework
+# Web Framework & Server
 fastapi
 uvicorn[standard]
-gunicorn
-httpx
+python-multipart
 
-# Utilities
-tenacity
+# Settings & Configuration
 pydantic
 pydantic-settings
 python-dotenv
 
-# AI Services
-openai
+# PDF Extraction
+liteparse
 
-# Search
-elasticsearch
+# Database & Vector Store
+asyncpg
+psycopg[binary]
+langchain-postgres
 
-# LangChain
-langchain-core<1.0.0
-langchain-text-splitters<1.0.0
-langchain<1.0.0
-langchain-community
-langchain-google-genai
+# LangChain & LangGraph
+langchain
+langchain-core
+langchain-openai
+langchain-text-splitters
+langgraph
 
 # Observability
 langsmith
-
-# DB
-asyncpg

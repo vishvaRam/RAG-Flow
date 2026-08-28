@@ -2,7 +2,6 @@ services:
   rag-service:
     container_name: rag_service
     build: . 
-    
     ports:
       # Maps host port 4545 to container port 4545
       - "4545:4545"
@@ -15,12 +14,10 @@ services:
       RAG_PORT: 4545
       RAG_GUNICORN_WORKERS: 2
       PYTHONDONTWRITEBYTECODE: 1
-    
     ipc: host
     ulimits:
       memlock: -1
       stack: 67108864
-      
     dns:
       - 8.8.8.8
       - 8.8.4.4

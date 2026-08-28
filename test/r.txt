@@ -1,0 +1,45 @@
+📦RAG-API
+ ┣ 📂Backup
+ ┃ ┗ 📜main-before-langchain.py
+ ┣ 📂Output
+ ┃ ┣ 📜res.md
+ ┃ ┣ 📜res2.md
+ ┃ ┣ 📜stream.md
+ ┃ ┗ 📜stream2.md
+ ┣ 📂app
+ ┃ ┣ 📂api
+ ┃ ┃ ┗ 📂routes
+ ┃ ┃ ┃ ┣ 📜chat.py
+ ┃ ┃ ┃ ┣ 📜health.py
+ ┃ ┃ ┃ ┗ 📜search.py
+ ┃ ┣ 📂core
+ ┃ ┃ ┣ 📜config.py
+ ┃ ┃ ┗ 📜logging.py
+ ┃ ┣ 📂models
+ ┃ ┃ ┗ 📜schemas.py
+ ┃ ┣ 📂services
+ ┃ ┃ ┣ 📜db_service.py
+ ┃ ┃ ┣ 📜embedding_service.py
+ ┃ ┃ ┣ 📜llm_service.py
+ ┃ ┃ ┣ 📜memory_service.py
+ ┃ ┃ ┣ 📜rag_service.py
+ ┃ ┃ ┣ 📜reranker_service.py
+ ┃ ┃ ┗ 📜search_service.py
+ ┃ ┣ 📂utils
+ ┃ ┃ ┣ 📜decorators.py
+ ┃ ┃ ┗ 📜prompts.py
+ ┃ ┣ 📜.DS_Store
+ ┃ ┗ 📜main.py
+ ┣ 📂scripts
+ ┃ ┣ 📜create_history_table.sql
+ ┃ ┣ 📜create_prompt_table.sql
+ ┃ ┗ 📜create_summary_table.sql
+ ┣ 📂test
+ ┃ ┗ 📜stream-test.py
+ ┣ 📜.env
+ ┣ 📜.env.example
+ ┣ 📜.gitignore
+ ┣ 📜Dockerfile
+ ┣ 📜RUN.md
+ ┣ 📜docker-compose.yaml
+ ┗ 📜requirements.txt

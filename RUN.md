@@ -2,6 +2,7 @@ gunicorn app.main:app -b 0.0.0.0:4545 -w 1 -k uvicorn.workers.UvicornWorker --ti
 
 With Session
 
+```JSON
 {
   "session_id": "jee_physics01",
   "user_id": "student_123",
@@ -12,13 +13,13 @@ With Session
       "content": "what are the NEWTON's laws?"
     }
   ],
-  "stream": false,
-  "top_k": 5,
-  "temperature": 0.3
+  "stream": false
 }
+```
 
 ---
 
+```JSON
 {
   "session_id": "jee_physics01",
   "user_id": "student_123",
@@ -26,16 +27,18 @@ With Session
   "messages": [
     {
       "role": "user",
-      "content": "Two point charges, $+Q$ and $-Q$, are placed a distance $d$ apart. What is the electric field magnitude at a point exactly midway between them?"
+      "content": "Two point charges, +Q+Q and -Q−Q, are placed a distance dd apart. What is the electric field magnitude at a point exactly midway between them?"
     }
   ],
   "stream": false,
   "top_k": 5,
   "temperature": 0.3
 }
+```
 
 ---
 
+```JSON
 {
   "session_id": "jee_physics01",
   "user_id": "student_123",
@@ -50,9 +53,11 @@ With Session
   "top_k": 5,
   "temperature": 0.3
 }
+```
 
 ---
 
+```JSON
 {
   "session_id": "jee_physics01",
   "user_id": "student_123",
@@ -60,27 +65,31 @@ With Session
   "messages": [
     {
       "role": "user",
-     "content": "A steel rod is fixed between two rigid supports at $20^{\\circ}\\text{C}$. The rod is then heated to $50^{\\circ}\\text{C}$. If the Young's modulus of steel is $Y$ and its coefficient of linear expansion is $\\alpha$, derive the expression for the thermal stress developed in the rod."
+     "content": "A steel rod is fixed between two rigid supports at 20^{\\circ}\\text{C}20circtextC. The rod is then heated to 50^{\\circ}\\text{C}50circtextC. If the Young's modulus of steel is YY and its coefficient of linear expansion is \\alphaalpha, derive the expression for the thermal stress developed in the rod."
     }
   ],
   "stream": false,
   "top_k": 5,
   "temperature": 0.3
 }
+```
 
 ---
 
 # Search
 
+```JSON
 {
     "query": "Newtons laws of motion",
     "top_k": 5
 }
+```
 
 ---
 
 # Chat
 
+```JSON
 {
   "messages": [
     {
@@ -93,9 +102,7 @@ With Session
   "topic_filter": null,
   "top_k": 5,
   "temperature": 0.7
-}
-
-{
+}{
   "messages": [
     {
       "role": "user",
@@ -107,9 +114,7 @@ With Session
   "topic_filter": null,
   "top_k": 5,
   "temperature": 0.7
-}
-
-{
+}{
   "messages": [
     {
       "role": "user",
@@ -122,3 +127,4 @@ With Session
   "top_k": 5,
   "temperature": 0.7
 }
+```
