@@ -1,4 +1,5 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter
+
 from app.services.db_service import db_service
 
 router = APIRouter(prefix="/history", tags=["History"])

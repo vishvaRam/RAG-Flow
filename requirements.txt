@@ -18,7 +18,7 @@ pydantic-settings
 python-dotenv
 
 # PDF Extraction
-liteparse
+marker-pdf[full]
 
 # Database & Vector Store
 asyncpg
@@ -28,6 +28,7 @@ langchain-postgres
 # LangChain & LangGraph
 langchain
 langchain-core
+langchain-google-genai
 langchain-openai
 langchain-text-splitters
 langgraph

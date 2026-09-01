@@ -1,7 +1,8 @@
 from functools import lru_cache
-from typing import Optional
-from pydantic_settings import BaseSettings
+
 from dotenv import load_dotenv
+from pydantic_settings import BaseSettings
+
 from app.utils.prompts import JEE_CONTEXT_PROMPT, JEE_SYS_PROMPT
 
 load_dotenv()
@@ -71,6 +72,11 @@ class Settings(BaseSettings):
     LANGSMITH_ENDPOINT: str = "https://api.smith.langchain.com"
     LANGSMITH_PROJECT: str = "LangGraph-RAG"
     LANGSMITH_TRACING: bool = True
+
+    MAX_HISTORY_MESSAGES: int = 20
+    SUMMARY_INTERVAL: int = 5
+    SUMMARY_MODEL: str = "gemini-3.1-flash-lite"
+    SUMMARY_MAX_TOKENS: int = 512
 
     ############################
     # 🪵 Logging

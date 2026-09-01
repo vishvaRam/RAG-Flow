@@ -1,7 +1,8 @@
 import secrets
 import string
-from typing import Optional, List, Dict, Any
 from contextlib import asynccontextmanager
+from typing import Any
+
 import asyncpg
 
 from app.core.config import get_settings
@@ -27,7 +28,7 @@ class PostgreSQLService:
     """
 
     def __init__(self):
-        self.pool: Optional[asyncpg.Pool] = None
+        self.pool: asyncpg.Pool | None = None
         self._initializing = False
 
     async def _ensure_pool(self):
@@ -47,7 +48,10 @@ class PostgreSQLService:
                 )
                 logger.info("✓ PostgreSQL asyncpg connection pool created successfully")
             except Exception as error:
-                logger.error(f"✗ Error creating PostgreSQL connection pool: {error}", exc_info=True)
+                logger.error(
+                    f"✗ Error creating PostgreSQL connection pool: {error}",
+                    exc_info=True,
+                )
                 self._initializing = False
                 raise
             finally:
@@ -65,7 +69,7 @@ class PostgreSQLService:
 
     async def execute_query(
         self, query: str, *args, fetch: bool = True, fetchone: bool = False
-    ) -> Optional[List[Dict[str, Any]]]:
+    ) -> list[dict[str, Any]] | None:
         """Execute a parameterized SQL query asynchronously."""
         async with self.acquire_connection() as conn:
             if fetchone:
@@ -79,7 +83,7 @@ class PostgreSQLService:
                 return None
 
     async def insert_message(
-        self, message: ChatMessageCreateDB, message_id: Optional[str] = None
+        self, message: ChatMessageCreateDB, message_id: str | None = None
     ) -> ChatMessageReadDB:
         """Insert a chat message (user or assistant) into the history table."""
         if message_id is None:
@@ -107,7 +111,7 @@ class PostgreSQLService:
 
     async def get_chat_history(
         self, session_id: str, limit: int = 50, offset: int = 0
-    ) -> List[ChatMessageReadDB]:
+    ) -> list[ChatMessageReadDB]:
         """Retrieve paginated chat history for a session."""
         query = f"""
         SELECT id, session_id, sender_id, sender_type, message, 
@@ -131,7 +135,7 @@ class PostgreSQLService:
         result = await self.execute_query(query, session_id, fetchone=True)
         return result["count"] if result else 0  # type: ignore
 
-    async def get_session_summary(self, session_id: str) -> Optional[SessionSummaryDB]:
+    async def get_session_summary(self, session_id: str) -> SessionSummaryDB | None:
         """Retrieve the latest session summary."""
         query = f"""
         SELECT id, session_id, summary, messages_count, created_at, updated_at

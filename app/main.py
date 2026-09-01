@@ -1,8 +1,8 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.api.routes import agent, documents, health, history
+
+from app.api.routes import chat, documents, health, history
 from app.core.config import get_settings
-from app.core.logging import logger
 
 settings = get_settings()
 
@@ -23,7 +23,7 @@ app.add_middleware(
 
 # Route registrations
 app.include_router(health.router)
-app.include_router(agent.router)
+app.include_router(chat.router)
 app.include_router(documents.router)
 app.include_router(history.router)
 
