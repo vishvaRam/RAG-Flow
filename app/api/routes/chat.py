@@ -16,10 +16,7 @@ router = APIRouter(prefix="/agent", tags=["Agent"])
 
 
 def extract_text_content(content: Any) -> str:
-    """
-    Safely extract plain text from LangChain message content.
-    Handles plain string or list of content blocks.
-    """
+    """Safely extract plain text from LangChain message content."""
     if isinstance(content, str):
         return content
     if isinstance(content, list):
@@ -34,7 +31,7 @@ def extract_text_content(content: Any) -> str:
             else:
                 text_parts.append(str(part))
         return "".join(text_parts).strip()
-    return str(content).strip()
+    return str(content).strip() if content is not None else ""
 
 
 @router.post("/chat")
@@ -44,8 +41,9 @@ async def chat_with_agent(
 ):
     """
     Interact with the LangGraph ReAct agent.
-    - Reconstructs history and persistent summaries via memory_service.
-    - Supports SSE streaming and standard request/response.
+    - Preserves internal LangGraph thought signatures.
+    - Prevents duplicate SystemMessages in MemorySaver checkpoints.
+    - Supports SSE streaming and synchronous request/response.
     """
     # 1. Extract the latest user query
     user_messages = [m for m in request.messages if m.role == "user"]
@@ -56,7 +54,7 @@ async def chat_with_agent(
         )
     latest_user_message = user_messages[-1].content
 
-    # 2. Persist incoming user query to PostgreSQL in background
+    # 2. Persist incoming user query
     background_tasks.add_task(
         db_service.insert_message,
         ChatMessageCreateDB(
@@ -67,31 +65,36 @@ async def chat_with_agent(
         ),
     )
 
-    # 3. Load previous history + existing summary context from memory_service
-    past_context = await memory_service.load_session_context(request.session_id)
+    config = {"configurable": {"thread_id": request.session_id}}
 
-    # 4. Build dynamic system prompt
-    system_prompt = settings.JEE_SYSTEM_PROMPT
-    if request.exam:
-        system_prompt += (
-            f"\n\nContext Directive: The student is preparing for the '{request.exam.upper()}' exam. "
-            f"When invoking 'retrieve_study_material', prioritize exam='{request.exam.upper()}'."
-        )
-
-    # Inject history context
-    system_prompt += (
-        f"\n\n--- PREVIOUS CONVERSATION CONTEXT ---\n"
-        f"{past_context}\n"
-        f"------------------------------------"
+    # 3. Verify if graph state already exists for this thread
+    state_snapshot = await agent_service.agent.aget_state(config)
+    existing_messages = (
+        state_snapshot.values.get("messages", []) if state_snapshot else []
     )
 
-    # 5. Assemble input messages
-    input_messages = [
-        SystemMessage(content=system_prompt),
-        HumanMessage(content=latest_user_message),
-    ]
+    input_messages = []
 
-    config = {"configurable": {"thread_id": request.session_id}}
+    # Inject System Prompt ONLY on the initial turn for this thread
+    if not existing_messages:
+        past_context = await memory_service.load_session_context(request.session_id)
+        system_prompt = settings.JEE_SYSTEM_PROMPT
+        if request.exam:
+            system_prompt += (
+                f"\n\nContext Directive: The student is preparing for the '{request.exam.upper()}' exam. "
+                f"When invoking 'retrieve_study_material', prioritize exam='{request.exam.upper()}'."
+            )
+
+        if past_context:
+            system_prompt += (
+                f"\n\n--- PREVIOUS CONVERSATION CONTEXT ---\n"
+                f"{past_context}\n"
+                f"------------------------------------"
+            )
+        input_messages.append(SystemMessage(content=system_prompt))
+
+    # Add the current human input turn
+    input_messages.append(HumanMessage(content=latest_user_message))
 
     # ==================== STREAMING MODE ====================
     if request.stream:
@@ -108,8 +111,12 @@ async def chat_with_agent(
                         event["event"] == "on_chat_model_stream"
                         and event.get("metadata", {}).get("langgraph_node") == "agent"
                     ):
-                        raw_chunk = event["data"]["chunk"].content
-                        chunk_content = extract_text_content(raw_chunk)
+                        chunk = event["data"]["chunk"]
+                        # Skip tool call chunks during token generation
+                        if getattr(chunk, "tool_call_chunks", None):
+                            continue
+
+                        chunk_content = extract_text_content(chunk.content)
                         if chunk_content:
                             accumulated_response += chunk_content
                             yield f"data: {chunk_content}\n\n"
@@ -132,7 +139,6 @@ async def chat_with_agent(
                             message=clean_assistant_text,
                         ),
                     )
-                    # Trigger progressive summarization check
                     background_tasks.add_task(
                         memory_service.summarize_session_if_needed,
                         request.session_id,
@@ -157,7 +163,6 @@ async def chat_with_agent(
     final_message = result["messages"][-1]
     final_answer = extract_text_content(final_message.content)
 
-    # Persist assistant response
     background_tasks.add_task(
         db_service.insert_message,
         ChatMessageCreateDB(
@@ -168,7 +173,6 @@ async def chat_with_agent(
         ),
     )
 
-    # Trigger progressive summarization check
     background_tasks.add_task(
         memory_service.summarize_session_if_needed,
         request.session_id,

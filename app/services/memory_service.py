@@ -30,7 +30,7 @@ class MemoryService:
             model=settings.LLM_MODEL,
             google_api_key=settings.LLM_API_KEY,
             temperature=0.0,
-            max_tokens=4000,
+            max_output_tokens=4000,
             timeout=30,
         )
 
@@ -46,13 +46,17 @@ class MemoryService:
         )
 
         if not db_records and not existing_summary:
-            return "No previous history."
+            return ""
 
         chronological_records = list(reversed(db_records))
 
         formatted_lines = []
         for record in chronological_records:
-            role = "Student" if record.sender_type.lower() in ("user", "human") else "Tutor"
+            role = (
+                "Student"
+                if record.sender_type.lower() in ("user", "human")
+                else "Tutor"
+            )
             formatted_lines.append(f"{role}: {record.message}")
 
         recent_dialogue = "\n".join(formatted_lines)
@@ -117,7 +121,9 @@ class MemoryService:
                 summary=updated_summary_text.strip(),
                 messages_count=total_count,
             )
-            logger.info(f"✓ Summary persisted for session {session_id} up to message #{total_count}")
+            logger.info(
+                f"✓ Summary persisted for session {session_id} up to message #{total_count}"
+            )
 
 
 memory_service = MemoryService()

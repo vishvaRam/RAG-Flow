@@ -1,4 +1,5 @@
 from typing import Any
+
 from langchain_core.tools import tool
 from pydantic import BaseModel, Field
 
@@ -50,7 +51,21 @@ async def retrieve_study_material(
     doc_type: str | None = None,
     year: int | None = None,
 ) -> str:
-    """Retrieve authoritative syllabus documents, textbook excerpts, formulas, and past year questions from the vector index."""
+    """
+    Retrieve relevant academic study materials from the vector index.
+
+    Args:
+        query: Core academic question, concepts, or keywords to search.
+        exam: Filter by exam: JEE, NEET, UPSC, or BOARDS.
+        subject: Filter by subject, e.g. Physics, Chemistry, Maths, Biology.
+        grade: Filter by class/standard, e.g. Class_11 or Class_12.
+        topic: Filter by specific chapter or topic, e.g. Thermodynamics.
+        doc_type: Filter by document type: NCERT, PYQ, Notes, or FormulaSheet.
+        year: Filter by specific PYQ exam year, e.g. 2021 or 2024.
+
+    Use filters only when they are relevant to the user's query.
+    Returns the most relevant matching documents from the vector index.
+    """
     filter_dict: dict[str, Any] = {}
     if exam:
         filter_dict["exam"] = exam.strip().upper()

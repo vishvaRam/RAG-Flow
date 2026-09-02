@@ -17,11 +17,12 @@ class AgentService:
     def __init__(self):
         self.tools = [retrieve_study_material]
 
+        # Use max_output_tokens instead of max_tokens for ChatGoogleGenerativeAI
         self.agent_llm = ChatGoogleGenerativeAI(
             model=settings.LLM_MODEL,
             google_api_key=settings.LLM_API_KEY,
             temperature=settings.TEMPERATURE,
-            max_tokens=settings.MAX_TOKENS,
+            max_output_tokens=settings.MAX_TOKENS,
             timeout=settings.LLM_TIMEOUT,
         )
         self.llm = self.agent_llm.bind_tools(self.tools)
