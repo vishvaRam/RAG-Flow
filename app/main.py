@@ -1,16 +1,32 @@
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api.routes import chat, documents, health, history
+from app.api.router import api_router
 from app.core.config import get_settings
+from app.core.database import db_manager
+from app.core.logging import logger
 
 settings = get_settings()
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    settings.configure_langsmith()
+    await db_manager.initialize()
+    logger.info(
+        f"✓ {settings.APP_NAME} v{settings.APP_VERSION} online on {settings.API_HOST}:{settings.API_PORT}"
+    )
+    yield
+    await db_manager.close()
+
 
 app = FastAPI(
     title=settings.APP_NAME,
     version=settings.APP_VERSION,
-    docs_url="/docs",
-    redoc_url="/redoc",
+    lifespan=lifespan,
+    debug=settings.DEBUG,
 )
 
 app.add_middleware(
@@ -21,12 +37,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Route registrations
-app.include_router(health.router)
-app.include_router(chat.router)
-app.include_router(documents.router)
-app.include_router(history.router)
-
+app.include_router(api_router)
 
 if __name__ == "__main__":
     import uvicorn
@@ -35,5 +46,5 @@ if __name__ == "__main__":
         "app.main:app",
         host=settings.API_HOST,
         port=settings.API_PORT,
-        reload=settings.DEBUG,
+        reload=True,
     )

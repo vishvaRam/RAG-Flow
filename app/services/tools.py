@@ -1,11 +1,12 @@
 from typing import Any
 
+from langchain_core.runnables import RunnableConfig
 from langchain_core.tools import tool
 from pydantic import BaseModel, Field
 
 from app.core.config import get_settings
 from app.core.logging import logger
-from app.services.vector_service import vector_service
+from app.services.vector import vector_service
 
 settings = get_settings()
 
@@ -13,72 +14,49 @@ settings = get_settings()
 class EducationalRetrievalInput(BaseModel):
     query: str = Field(
         ...,
-        description="Search query containing core academic concepts, keywords, or question text.",
-    )
-    exam: str | None = Field(
-        None,
-        description="Target examination filter. Allowed values: 'JEE', 'NEET', 'UPSC', 'BOARDS'.",
+        description=(
+            "Focused keyword-rich search query containing core scientific concepts, "
+            "formulas, theorems, or specific question text to match in textbooks and PYQs."
+        ),
     )
     subject: str | None = Field(
         None,
-        description="Academic subject name (e.g., 'Physics', 'Chemistry', 'Mathematics', 'Biology').",
-    )
-    grade: str | None = Field(
-        None,
-        description="Target class or standard (e.g., 'Class_11', 'Class_12').",
-    )
-    topic: str | None = Field(
-        None,
-        description="Specific academic chapter/topic (e.g., 'Thermodynamics', 'Electrostatics', 'Calculus').",
-    )
-    doc_type: str | None = Field(
-        None,
-        description="Type of document to fetch: 'NCERT', 'PYQ' (Previous Year Questions), 'Notes', or 'FormulaSheet'.",
-    )
-    year: int | None = Field(
-        None,
-        description="Specific exam year for PYQs (e.g., 2021, 2022, 2023, 2024).",
+        description=(
+            "Academic subject category to narrow down search: 'Physics', 'Chemistry', "
+            "'Mathematics', 'Biology'. Leave null if the topic crosses multiple subjects."
+        ),
     )
 
 
 @tool("retrieve_study_material", args_schema=EducationalRetrievalInput)
 async def retrieve_study_material(
     query: str,
-    exam: str | None = None,
+    config: RunnableConfig,
     subject: str | None = None,
-    grade: str | None = None,
-    topic: str | None = None,
-    doc_type: str | None = None,
-    year: int | None = None,
 ) -> str:
     """
-    Retrieve relevant academic study materials from the vector index.
+    Search and retrieve authoritative academic study materials, textbook excerpts,
+    derivations, formulas, and past year questions (PYQs) from the vector knowledge base.
 
-    Args:
-        query: Core academic question, concepts, or keywords to search.
-        exam: Filter by exam: JEE, NEET, UPSC, or BOARDS.
-        subject: Filter by subject, e.g. Physics, Chemistry, Maths, Biology.
-        grade: Filter by class/standard, e.g. Class_11 or Class_12.
-        topic: Filter by specific chapter or topic, e.g. Thermodynamics.
-        doc_type: Filter by document type: NCERT, PYQ, Notes, or FormulaSheet.
-        year: Filter by specific PYQ exam year, e.g. 2021 or 2024.
+    WHEN TO CALL:
+    - Whenever solving or explaining academic concepts, formulas, definitions, or derivations.
+    - When answering textbook questions, standard curriculum problems, or previous year exam questions.
+    - To verify syllabus facts, theorems, or specific numerical problems.
 
-    Use filters only when they are relevant to the user's query.
-    Returns the most relevant matching documents from the vector index.
+    HOW TO QUERY:
+    - Extract essential keywords, concepts, or problem statements instead of conversational phrases.
+    - Pass `subject` if explicitly known to avoid cross-subject ambiguity.
+    - Target examination filter is automatically applied from system session configuration.
+
+    RETURNS:
+    - XML-formatted matching document excerpts with metadata (source, subject, topic).
     """
+    exam = config.get("configurable", {}).get("exam")
     filter_dict: dict[str, Any] = {}
     if exam:
-        filter_dict["exam"] = exam.strip().upper()
+        filter_dict["exam"] = str(exam).strip().upper()
     if subject:
         filter_dict["subject"] = subject.strip().capitalize()
-    if grade:
-        filter_dict["grade"] = grade.strip()
-    if topic:
-        filter_dict["topic"] = topic.strip()
-    if doc_type:
-        filter_dict["doc_type"] = doc_type.strip().upper()
-    if year:
-        filter_dict["year"] = year
 
     logger.info(f"🔍 Executing vector retrieval: '{query}' | Filters: {filter_dict}")
 
@@ -86,13 +64,13 @@ async def retrieve_study_material(
         docs = await vector_service.search(
             query=query,
             k=settings.TOP_K_RETRIEVAL,
-            filter_dict=filter_dict if filter_dict else None,
+            filters=filter_dict if filter_dict else None,
         )
 
         if not docs:
             return (
-                "NO_DOCUMENTS_FOUND: No exact matches found for the provided filters. "
-                "Consider removing narrow filters (like specific year or doc_type) and retry."
+                "NO_DOCUMENTS_FOUND: No exact matches found for the query in the knowledge base. "
+                "Try rephrasing with alternative technical keywords or removing the subject filter."
             )
 
         formatted_docs = []
