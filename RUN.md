@@ -10,6 +10,24 @@ With Session
   "messages": [
     {
       "role": "user",
+      "content": "What is the APPLICATION OF INTEGRALS"
+    }
+  ],
+  "exam": "JEE",
+  "stream": false
+}
+```
+
+---
+
+```JSON
+{
+  "session_id": "jee_physics01",
+  "user_id": "student_123",
+  "assistant_id": "asfasfasf",
+  "messages": [
+    {
+      "role": "user",
       "content": "What is the value of $\\int_{-1}^{1} \\sin^5 x \\cos^4 x \\, dx$, and how can the properties of even and odd functions be used to evaluate it without computing the full antiderivative?"
     }
   ],

@@ -29,7 +29,6 @@ langchain-postgres
 # LangChain & LangGraph
 langchain
 langchain-core
-langchain-google-genai
 langchain-openai
 langchain-text-splitters
 langgraph

@@ -1,5 +1,4 @@
 from langchain_core.messages import AnyMessage, SystemMessage
-from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_openai import ChatOpenAI
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import END, START, StateGraph
@@ -18,41 +17,20 @@ class AgentService:
 
     def __init__(self):
         self.tools = [retrieve_study_material]
-        
+
         # Initialize LLM based on provider configuration
-        self.base_llm = self._create_llm()
+        self.base_llm = ChatOpenAI(
+            model=settings.LLM_MODEL,
+            base_url=settings.LLM_PROVIDER_URL,
+            api_key=settings.LLM_API_KEY,
+            temperature=settings.TEMPERATURE,
+            max_tokens=settings.MAX_TOKENS,
+            timeout=settings.LLM_TIMEOUT,
+            reasoning_effort="minimal",
+        )
         self.bound_llm = self.base_llm.bind_tools(self.tools)
         self.checkpointer = MemorySaver()
         self.graph = self._build_graph()
-
-    def _create_llm(self):
-        """Create LLM instance based on the configured provider."""
-        model = settings.LLM_MODEL
-        provider_url = settings.LLM_PROVIDER_URL
-        
-        # Check if using OpenAI-compatible provider (OpenRouter, OpenAI, etc.)
-        # or Google Generative AI
-        if "google" not in str(model).lower():
-            # Use OpenAI-compatible model
-            print(f"Using OpenAI-compatible model: {model} with provider URL: {provider_url}")
-            return ChatOpenAI(
-                model=model,
-                base_url=provider_url,
-                api_key=settings.LLM_API_KEY,
-                temperature=settings.TEMPERATURE,
-                max_tokens=settings.MAX_TOKENS,
-                timeout=settings.LLM_TIMEOUT,
-            )
-        else:
-            # Use Google Generative AI
-            print(f"Using Google Generative AI model: {model}")
-            return ChatGoogleGenerativeAI(
-                model=model,
-                google_api_key=settings.LLM_API_KEY,
-                temperature=settings.TEMPERATURE,
-                max_output_tokens=settings.MAX_TOKENS,
-                timeout=settings.LLM_TIMEOUT,
-            )
 
     async def _init_context(self, state: AgentState) -> dict[str, AnyMessage]:
         """Ensures system prompt and context summary are injected on first turn."""
@@ -75,7 +53,9 @@ class AgentService:
         return {}
 
     async def _call_model(self, state: AgentState) -> dict[str, list[AnyMessage]]:
-        response = await self.bound_llm.ainvoke(state["messages"])
+        response = await self.bound_llm.ainvoke(
+            state["messages"],
+        )
         return {"messages": [response]}
 
     def _build_graph(self):
