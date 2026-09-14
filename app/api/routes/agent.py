@@ -3,7 +3,7 @@ from typing import Any
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException
 from fastapi.responses import StreamingResponse
-from langchain_core.messages import HumanMessage, SystemMessage
+from langchain_core.messages import HumanMessage
 
 from app.core.config import get_settings
 from app.models.schemas import AgentChatRequest, ChatMessageCreateDB
@@ -47,25 +47,13 @@ async def chat(request: AgentChatRequest, background_tasks: BackgroundTasks):
             "exam": request.exam,
         }
     }
-    state = await agent_service.graph.aget_state(
-        {"configurable": {"thread_id": request.session_id}}
-    )
-    messages = []
 
-    # Inject system prompt on initial turn
-    if not (state and state.values.get("messages")):
-        sys_prompt = settings.JEE_SYSTEM_PROMPT
-
-        if request.exam:
-            sys_prompt += f"\n\n{settings.JEE_CONTEXT_PROMPT.format(exam=request.exam.strip().upper())}"
-
-        past_context = await history_service.load_context(request.session_id)
-        if past_context:
-            sys_prompt += f"\n\n--- PREVIOUS SESSION SUMMARY ---\n{past_context}\n---------------------------------"
-
-        messages.append(SystemMessage(content=sys_prompt))
-
-    messages.append(HumanMessage(content=user_query))
+    input_state = {
+        "messages": [HumanMessage(content=user_query)],
+        "exam": request.exam,
+        "user_id": request.user_id,
+        "session_id": request.session_id,
+    }
 
     # Streaming mode
     if request.stream:
@@ -74,7 +62,7 @@ async def chat(request: AgentChatRequest, background_tasks: BackgroundTasks):
             accumulated = ""
             try:
                 async for event in agent_service.graph.astream_events(
-                    {"messages": messages}, config=thread_config, version="v2"
+                    input_state, config=thread_config, version="v2"
                 ):
                     if (
                         event["event"] == "on_chat_model_stream"
@@ -110,9 +98,7 @@ async def chat(request: AgentChatRequest, background_tasks: BackgroundTasks):
         )
 
     # Non-streaming mode
-    result = await agent_service.graph.ainvoke(
-        {"messages": messages}, config=thread_config
-    )
+    result = await agent_service.graph.ainvoke(input_state, config=thread_config)
     final_text = parse_content(result["messages"][-1].content)
 
     await history_service.insert_message(

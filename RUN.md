@@ -1,4 +1,4 @@
-gunicorn app.main:app -b 0.0.0.0:4545 -w 1 -k uvicorn.workers.UvicornWorker --timeout 120 --reload
+uvicorn app.main:app --host 0.0.0.0 --port 4545 --reload --timeout-keep-alive 120
 
 With Session
 
@@ -11,6 +11,24 @@ With Session
     {
       "role": "user",
       "content": "What is the value of $\\int_{-1}^{1} \\sin^5 x \\cos^4 x \\, dx$, and how can the properties of even and odd functions be used to evaluate it without computing the full antiderivative?"
+    }
+  ],
+  "exam": "JEE",
+  "stream": false
+}
+```
+
+---
+
+```JSON
+{
+  "session_id": "jee_physics01",
+  "user_id": "student_123",
+  "assistant_id": "asfasfasf",
+  "messages": [
+    {
+      "role": "user",
+      "content": "How do you evaluate the indefinite integral $\\int e^x \\left(\\tan^{-1} x + \\frac{1}{1+x^2}\\right) dx$ using the standard formula $\\int e^x [f(x) + f'(x)] \\, dx = e^x f(x) + C$?"
     }
   ],
   "exam": "JEE",

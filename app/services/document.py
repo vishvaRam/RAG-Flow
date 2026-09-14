@@ -78,5 +78,9 @@ class DocumentService:
             if os.path.exists(tmp_path):
                 os.remove(tmp_path)
 
+    async def delete_document(self, filename: str) -> int:
+        """Deletes all indexed chunks of the document from vector store."""
+        return await vector_service.delete_by_filename(filename)
+
 
 document_service = DocumentService()

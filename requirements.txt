@@ -10,6 +10,7 @@ optimum[onnxruntime]
 # Web Framework & Server
 fastapi
 uvicorn[standard]
+gunicorn
 python-multipart
 
 # Settings & Configuration

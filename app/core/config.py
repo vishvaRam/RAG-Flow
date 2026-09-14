@@ -26,18 +26,18 @@ class Settings(BaseSettings):
     JEE_CONTEXT_PROMPT: str = JEE_CONTEXT_PROMPT
 
     # LLM Configuration
-    LLM_PROVIDER_URL: str = "https://generativelanguage.googleapis.com/v1beta/openai/"
+    LLM_PROVIDER_URL: str = "https://openrouter.ai/api/v1/chat/completions"
     LLM_API_KEY: str
-    LLM_MODEL: str = "gemini-3.5-flash-lite"
-    MAX_TOKENS: int = 4096
+    LLM_MODEL: str = "qwen/qwen3.8-flash"
+    MAX_TOKENS: int = 8096
     TEMPERATURE: float = 0.4
     LLM_TIMEOUT: float = 30.0
 
     # Embeddings
     EMBEDDING_PROVIDER_URL: str = (
-        "https://generativelanguage.googleapis.com/v1beta/openai/"
+        "https://openrouter.ai/api/v1/chat/completions"
     )
-    EMBEDDING_MODEL: str = "gemini-embedding-001"
+    EMBEDDING_MODEL: str = "google/gemini-embedding-001"
     EMBEDDING_DIMENSIONS: int = 1024
 
     # RAG Settings

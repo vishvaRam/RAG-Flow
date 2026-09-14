@@ -1,6 +1,6 @@
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 
-from app.models.schemas import DocumentUploadResponse
+from app.models.schemas import DocumentDeleteResponse, DocumentUploadResponse
 from app.services.document import document_service
 
 router = APIRouter(prefix="/documents", tags=["Documents"])
@@ -37,4 +37,19 @@ async def upload_pdf(
         filename=file.filename,
         chunks_indexed=count,
         message="Successfully parsed and indexed document.",
+    )
+
+
+@router.delete("/{filename}", response_model=DocumentDeleteResponse)
+async def delete_pdf(filename: str):
+    count = await document_service.delete_document(filename)
+    if count == 0:
+        raise HTTPException(
+            status_code=404,
+            detail=f"No document chunks found for filename '{filename}'.",
+        )
+    return DocumentDeleteResponse(
+        filename=filename,
+        chunks_deleted=count,
+        message=f"Successfully deleted {count} chunk(s) from the vector database.",
     )

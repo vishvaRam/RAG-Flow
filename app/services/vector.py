@@ -79,5 +79,24 @@ class VectorService:
             logger.error(f"Vector search failed: {err}", exc_info=True)
             return []
 
+    async def delete_by_filename(self, filename: str) -> int:
+        """Deletes all chunks associated with a given filename from PGVector."""
+        query = """
+            DELETE FROM langchain_pg_embedding
+            WHERE collection_id = (
+                SELECT uuid FROM langchain_pg_collection WHERE name = $1 LIMIT 1
+            )
+            AND (
+                cmetadata->>'source' = $2
+                OR cmetadata->>'filename' = $2
+            )
+            RETURNING id;
+        """
+        async with db_manager.acquire_pg() as conn:
+            deleted_rows = await conn.fetch(query, settings.COLLECTION_NAME, filename)
+            count = len(deleted_rows)
+            logger.info(f"Deleted {count} vector chunks for file '{filename}'.")
+            return count
+
 
 vector_service = VectorService()

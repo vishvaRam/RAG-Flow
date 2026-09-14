@@ -1,6 +1,18 @@
-from typing import Literal
+from typing import Annotated, Literal
 
+from langchain_core.messages import AnyMessage
+from langgraph.graph.message import add_messages
 from pydantic import BaseModel, Field
+from typing_extensions import TypedDict
+
+
+class AgentState(TypedDict):
+    """LangGraph execution state representing the conversation workflow."""
+
+    messages: Annotated[list[AnyMessage], add_messages]
+    exam: str | None
+    user_id: str | None
+    session_id: str | None
 
 
 class ChatTurn(BaseModel):
@@ -50,6 +62,12 @@ class SessionSummaryDB(BaseModel):
 class DocumentUploadResponse(BaseModel):
     filename: str
     chunks_indexed: int
+    message: str
+
+
+class DocumentDeleteResponse(BaseModel):
+    filename: str
+    chunks_deleted: int
     message: str
 
 

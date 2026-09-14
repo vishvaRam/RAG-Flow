@@ -20,14 +20,14 @@ SUMMARY_PROMPT = ChatPromptTemplate.from_messages(
     [
         (
             "system",
-            """You are an expert academic conversation summarizer and context compression specialist.
-Your task is to synthesize the conversation into a highly compact, dense, and structured text summary.
+            """You are an ultra-concise academic context compression engine.
+                Your goal is to produce an extremely brief, dense, high-signal summary of the conversation in at most 3 to 5 concise bullet points or 2-3 short sentences.
 
-Compression Guidelines:
-- Extract and preserve key academic topics, concepts, theorems, and formulas discussed.
-- Note specific student queries, misconceptions, and resolutions.
-- Eliminate conversational filler, pleasantries, and redundant remarks.
-- Integrate with previous summary seamlessly without losing earlier context.""",
+                Strict Compression Rules:
+                - Keep the summary minimal, terse, and strictly factual (aim under 80-120 words).
+                - Retain ONLY key topics/theorems, essential formulas, and core questions resolved.
+                - Never write introductory/concluding filler, explanations, or meta-talk.
+                - Aggressively merge overlapping concepts with the previous summary instead of expanding it.""",
         ),
         (
             "human",
@@ -37,7 +37,7 @@ Compression Guidelines:
 Recent Messages to Integrate:
 {new_messages}
 
-Generate the updated compressed summary.""",
+Generate an ultra-compact summary:""",
         ),
     ]
 )
@@ -53,7 +53,7 @@ class HistoryService:
 
     def __init__(self):
         self.base_llm = ChatOpenAI(
-            model=settings.LLM_MODEL,
+            model=settings.SUMMARY_MODEL,
             api_key=settings.LLM_API_KEY,
             base_url=settings.LLM_PROVIDER_URL,
             temperature=settings.TEMPERATURE,
