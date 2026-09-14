@@ -65,6 +65,8 @@ async def retrieve_study_material(
             query=query,
             k=settings.TOP_K_RETRIEVAL,
             filters=filter_dict if filter_dict else None,
+            rerank=settings.RERANKER_ENABLE,
+            reranked_k=settings.RERANK_TOP_K,
         )
 
         if not docs:

@@ -1,6 +1,7 @@
 import asyncio
 from typing import Any
 
+import httpx
 from langchain_core.documents import Document
 from langchain_openai import OpenAIEmbeddings
 from langchain_postgres.vectorstores import PGVector
@@ -13,10 +14,17 @@ settings = get_settings()
 
 
 class VectorService:
-    """Encapsulates PGVector store operations and embedding generation."""
+    """Encapsulates PGVector store operations, embedding generation, and reranking."""
 
     def __init__(self):
         self._store: PGVector | None = None
+        self._http_client: httpx.AsyncClient | None = None
+
+    @property
+    def client(self) -> httpx.AsyncClient:
+        if self._http_client is None or self._http_client.is_closed:
+            self._http_client = httpx.AsyncClient(timeout=30.0)
+        return self._http_client
 
     @property
     def store(self) -> PGVector:
@@ -67,17 +75,79 @@ class VectorService:
                 await asyncio.sleep(delay)
         return all_ids
 
-    async def search(
-        self, query: str, k: int | None = None, filters: dict[str, Any] | None = None
+    async def _rerank(
+        self,
+        query: str,
+        documents: list[Document],
+        top_n: int,
     ) -> list[Document]:
-        limit = k or settings.TOP_K_RETRIEVAL
+        """Reranks documents via OpenRouter's /api/v1/rerank endpoint."""
+        if not documents:
+            return []
+
+        payload = {
+            "model": settings.RERANKER_MODEL,
+            "query": query,
+            "documents": [doc.page_content for doc in documents],
+            "top_n": min(top_n, len(documents)),
+        }
+        headers = {
+            "Authorization": f"Bearer {settings.LLM_API_KEY}",
+            "Content-Type": "application/json",
+        }
+
         try:
-            return await self.store.asimilarity_search(
-                query=query, k=limit, filter=filters
+            response = await self.client.post(
+                settings.RERANKER_PROVIDER_URL + "/rerank",
+                json=payload,
+                headers=headers,
+            )
+            response.raise_for_status()
+            data = response.json()
+
+            reranked_docs: list[Document] = []
+            for item in data.get("results", []):
+                idx = item["index"]
+                doc = documents[idx]
+                # Attach relevance score directly to metadata
+                doc.metadata["relevance_score"] = item.get("relevance_score")
+                reranked_docs.append(doc)
+
+            return reranked_docs
+
+        except Exception as err:
+            logger.error(
+                f"Reranking failed, falling back to top-{top_n} vector results: {err}"
+            )
+            return documents[:top_n]
+
+    async def search(
+        self,
+        query: str,
+        k: int | None = None,
+        filters: dict[str, Any] | None = None,
+        rerank: bool = True,
+        reranked_k: int = 8,
+    ) -> list[Document]:
+        """
+        Performs similarity search, optionally reranking top results with Qwen.
+        - initial_k: Number of candidate documents fetched from PGVector.
+        - limit (k): Final number of highest-scoring documents returned.
+        """
+
+        try:
+            candidates = await self.store.asimilarity_search(
+                query=query, k=k, filter=filters
             )
         except Exception as err:
             logger.error(f"Vector search failed: {err}", exc_info=True)
             return []
+        if rerank:
+            return await self._rerank(
+                query=query, documents=candidates, top_n=reranked_k
+            )
+        else:
+            return candidates[:k]
 
     async def delete_by_filename(self, filename: str) -> int:
         """Deletes all chunks associated with a given filename from PGVector."""

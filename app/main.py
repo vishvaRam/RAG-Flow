@@ -13,7 +13,7 @@ settings = get_settings()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    settings.configure_langsmith()
+    settings.configure_langfuse()
     await db_manager.initialize()
     logger.info(
         f"✓ {settings.APP_NAME} v{settings.APP_VERSION} online on {settings.API_HOST}:{settings.API_PORT}"

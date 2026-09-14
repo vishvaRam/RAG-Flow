@@ -1,12 +1,3 @@
-# PyTorch CPU-only (for sentence-transformers)
---extra-index-url https://download.pytorch.org/whl/cpu
-torch
-torchvision
-
-# Core ML
-sentence-transformers
-optimum[onnxruntime]
-
 # Web Framework & Server
 fastapi
 uvicorn[standard]
@@ -34,4 +25,4 @@ langchain-text-splitters
 langgraph
 
 # Observability
-langsmith
+langfuse

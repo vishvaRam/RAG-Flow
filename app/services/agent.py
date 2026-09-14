@@ -26,7 +26,7 @@ class AgentService:
             temperature=settings.TEMPERATURE,
             max_tokens=settings.MAX_TOKENS,
             timeout=settings.LLM_TIMEOUT,
-            reasoning_effort="minimal",
+            extra_body={"reasoning": {"effort": "minimal"}},
         )
         self.bound_llm = self.base_llm.bind_tools(self.tools)
         self.checkpointer = MemorySaver()

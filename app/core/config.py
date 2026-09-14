@@ -26,7 +26,7 @@ class Settings(BaseSettings):
     JEE_CONTEXT_PROMPT: str = JEE_CONTEXT_PROMPT
 
     # LLM Configuration
-    LLM_PROVIDER_URL: str = "https://openrouter.ai/api/v1/chat/completions"
+    LLM_PROVIDER_URL: str = "https://openrouter.ai/api/v1"
     LLM_API_KEY: str
     LLM_MODEL: str = "qwen/qwen3.8-flash"
     MAX_TOKENS: int = 8096
@@ -35,15 +35,21 @@ class Settings(BaseSettings):
 
     # Embeddings
     EMBEDDING_PROVIDER_URL: str = (
-        "https://openrouter.ai/api/v1/chat/completions"
+        "https://openrouter.ai/api/v1"
     )
     EMBEDDING_MODEL: str = "google/gemini-embedding-001"
     EMBEDDING_DIMENSIONS: int = 1024
 
+    # Reranker
+    RERANKER_ENABLE: bool = True
+    RERANKER_PROVIDER_URL: str = "https://openrouter.ai/api/v1"
+    RERANKER_MODEL: str = "qwen/qwen3-reranker-0.6b"
+    RERANK_TOP_K: int = 8
+
     # RAG Settings
     CHUNK_SIZE: int = 1200
     CHUNK_OVERLAP: int = 250
-    TOP_K_RETRIEVAL: int = 6
+    TOP_K_RETRIEVAL: int = 25
     COLLECTION_NAME: str = "pdf_knowledge_base"
 
     # Database
@@ -59,16 +65,16 @@ class Settings(BaseSettings):
     SUMMARY_TABLE: str = "chat_session_summaries"
 
     # LangSmith
-    LANGSMITH_API_KEY: str | None = None
-    LANGSMITH_ENDPOINT: str = "https://api.smith.langchain.com"
-    LANGSMITH_PROJECT: str = "LangGraph-RAG"
-    LANGSMITH_TRACING: bool = True
+    LANGFUSE_SECRET_KEY: str
+    LANGFUSE_PUBLIC_KEY: str
+    LANGFUSE_BASE_URL: str = "https://cloud.langfuse.com"
+    LANGFUSE_TRACING: bool = True
 
     # History & Summarization
     MAX_HISTORY_MESSAGES: int = 20
     SUMMARY_INTERVAL: int = 5
-    SUMMARY_MODEL: str = "gemini-3.1-flash-lite"
-    SUMMARY_MAX_TOKENS: int = 512
+    SUMMARY_MODEL: str = "google/gemini-3.1-flash-lite"
+    SUMMARY_MAX_TOKENS: int = 2048
 
     # Logging
     LOG_LEVEL: str = "INFO"
@@ -82,12 +88,11 @@ class Settings(BaseSettings):
     def sqlalchemy_async_url(self) -> str:
         return f"postgresql+asyncpg://{self.DB_USER}:{self.DB_PASSWORD}@{self.DB_HOST}:{self.DB_PORT}/{self.DB_NAME}"
 
-    def configure_langsmith(self) -> None:
-        if self.LANGSMITH_TRACING and self.LANGSMITH_API_KEY:
-            os.environ["LANGCHAIN_TRACING_V2"] = "true"
-            os.environ["LANGCHAIN_API_KEY"] = self.LANGSMITH_API_KEY
-            os.environ["LANGCHAIN_PROJECT"] = self.LANGSMITH_PROJECT
-            os.environ["LANGCHAIN_ENDPOINT"] = self.LANGSMITH_ENDPOINT
+    def configure_langfuse(self) -> None:
+        if self.LANGFUSE_TRACING and self.LANGFUSE_SECRET_KEY:
+            os.environ["LANGFUSE_SECRET_KEY"] = self.LANGFUSE_SECRET_KEY
+            os.environ["LANGFUSE_PUBLIC_KEY"] = self.LANGFUSE_PUBLIC_KEY
+            os.environ["LANGFUSE_BASE_URL"] = self.LANGFUSE_BASE_URL
 
 
 @lru_cache()

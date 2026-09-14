@@ -57,8 +57,9 @@ class HistoryService:
             api_key=settings.LLM_API_KEY,
             base_url=settings.LLM_PROVIDER_URL,
             temperature=settings.TEMPERATURE,
-            max_tokens=settings.MAX_TOKENS,
+            max_tokens=settings.MAX_TOKENS, 
             timeout=settings.LLM_TIMEOUT,
+            extra_body={"reasoning": {"effort": "minimal"}},
         )
         self.summary_chain = SUMMARY_PROMPT | self.base_llm.with_structured_output(
             SessionSummaryOutput
