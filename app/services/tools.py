@@ -70,8 +70,6 @@ async def retrieve_study_material(
             filters=filter_dict if filter_dict else None,
             rerank=settings.RERANKER_ENABLE,
             reranked_k=settings.RERANK_TOP_K,
-            session_id=session_id,
-            user_id=user_id,
         )
 
         if not docs:
