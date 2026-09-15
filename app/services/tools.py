@@ -53,8 +53,6 @@ async def retrieve_study_material(
     """
     configurable = config.get("configurable", {})
     exam = configurable.get("exam")
-    session_id = configurable.get("session_id")
-    user_id = configurable.get("user_id")
     filter_dict: dict[str, Any] = {}
     if exam:
         filter_dict["exam"] = str(exam).strip().upper()
