@@ -101,7 +101,9 @@ async def chat(request: AgentChatRequest, background_tasks: BackgroundTasks):
                         )
                     )
                     asyncio.create_task(
-                        history_service.summarize_if_needed(request.session_id)
+                        history_service.summarize_if_needed(
+                            request.session_id, request.user_id
+                        )
                     )
 
         return StreamingResponse(
@@ -122,6 +124,8 @@ async def chat(request: AgentChatRequest, background_tasks: BackgroundTasks):
             message=final_text,
         )
     )
-    background_tasks.add_task(history_service.summarize_if_needed, request.session_id)
+    background_tasks.add_task(
+        history_service.summarize_if_needed, request.session_id, request.user_id
+    )
 
     return {"session_id": request.session_id, "answer": final_text}

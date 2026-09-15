@@ -114,7 +114,9 @@ class VectorService:
                 # Attach relevance score directly to metadata
                 doc.metadata["relevance_score"] = item.get("relevance_score")
                 reranked_docs.append(doc)
-
+            logger.info(
+                f"Reranked {len(reranked_docs)} documents for query '{query[:50]}...'."
+            )
             return reranked_docs
 
         except Exception as err:

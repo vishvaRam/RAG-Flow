@@ -3,6 +3,8 @@ import string
 
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_openai import ChatOpenAI
+from langfuse import observe
+from langfuse.langchain import CallbackHandler
 
 from app.core.config import get_settings
 from app.core.database import db_manager
@@ -57,7 +59,7 @@ class HistoryService:
             api_key=settings.LLM_API_KEY,
             base_url=settings.LLM_PROVIDER_URL,
             temperature=settings.TEMPERATURE,
-            max_tokens=settings.MAX_TOKENS, 
+            max_tokens=settings.MAX_TOKENS,
             timeout=settings.LLM_TIMEOUT,
             extra_body={"reasoning": {"effort": "minimal"}},
         )
@@ -131,7 +133,10 @@ class HistoryService:
             blocks.append(f"Recent Conversation:\n{dialogue}")
         return "\n\n".join(blocks)
 
-    async def summarize_if_needed(self, session_id: str) -> None:
+    @observe(name="auto-summarization")
+    async def summarize_if_needed(
+        self, session_id: str, user_id: str | None = None
+    ) -> None:
         async with db_manager.acquire_pg() as conn:
             count_row = await conn.fetchrow(
                 f"SELECT COUNT(*) as cnt FROM {settings.HISTORY_TABLE} WHERE session_id = $1 AND deleted_at IS NULL",
@@ -153,11 +158,23 @@ class HistoryService:
                 for m in reversed(records)
             )
 
+            summary_config = {
+                "callbacks": (
+                    [CallbackHandler()] if settings.LANGFUSE_TRACING else []
+                ),
+                "metadata": {
+                    "langfuse_session_id": session_id,
+                    "langfuse_user_id": user_id,
+                    "langfuse_trace_name": "auto-summarization",
+                },
+                "tags": ["summary", "background-task"],
+            }
             result: SessionSummaryOutput = await self.summary_chain.ainvoke(
                 {
                     "existing_summary": latest.summary if latest else "None",
                     "new_messages": dialogue,
-                }
+                },
+                config=summary_config,
             )
             summary_text = (
                 result.summary.strip()
