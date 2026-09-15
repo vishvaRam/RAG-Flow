@@ -1,5 +1,6 @@
 import os
 from functools import lru_cache
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from app.utils.prompts import JEE_CONTEXT_PROMPT, JEE_SYS_PROMPT
@@ -92,7 +93,11 @@ class Settings(BaseSettings):
         if self.LANGFUSE_TRACING and self.LANGFUSE_SECRET_KEY:
             os.environ["LANGFUSE_SECRET_KEY"] = self.LANGFUSE_SECRET_KEY
             os.environ["LANGFUSE_PUBLIC_KEY"] = self.LANGFUSE_PUBLIC_KEY
+            # LANGFUSE_HOST is the current SDK variable; keep BASE_URL for
+            # compatibility with older Langfuse integrations.
+            os.environ["LANGFUSE_HOST"] = self.LANGFUSE_BASE_URL
             os.environ["LANGFUSE_BASE_URL"] = self.LANGFUSE_BASE_URL
+            os.environ["LANGFUSE_TRACING"] = "true"
 
 
 @lru_cache()

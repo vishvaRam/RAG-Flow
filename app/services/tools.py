@@ -51,7 +51,10 @@ async def retrieve_study_material(
     RETURNS:
     - XML-formatted matching document excerpts with metadata (source, subject, topic).
     """
-    exam = config.get("configurable", {}).get("exam")
+    configurable = config.get("configurable", {})
+    exam = configurable.get("exam")
+    session_id = configurable.get("session_id")
+    user_id = configurable.get("user_id")
     filter_dict: dict[str, Any] = {}
     if exam:
         filter_dict["exam"] = str(exam).strip().upper()
@@ -67,6 +70,8 @@ async def retrieve_study_material(
             filters=filter_dict if filter_dict else None,
             rerank=settings.RERANKER_ENABLE,
             reranked_k=settings.RERANK_TOP_K,
+            session_id=session_id,
+            user_id=user_id,
         )
 
         if not docs:

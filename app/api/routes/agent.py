@@ -4,6 +4,7 @@ from typing import Any
 from fastapi import APIRouter, BackgroundTasks, HTTPException
 from fastapi.responses import StreamingResponse
 from langchain_core.messages import HumanMessage
+from langfuse.langchain import CallbackHandler
 
 from app.core.config import get_settings
 from app.models.schemas import AgentChatRequest, ChatMessageCreateDB
@@ -41,11 +42,23 @@ async def chat(request: AgentChatRequest, background_tasks: BackgroundTasks):
         )
     )
 
+    # Attach Langfuse at the graph boundary so model, tool, retriever, embedding,
+    # and reranking work is represented in one trace.
+    callbacks = [CallbackHandler()] if settings.LANGFUSE_TRACING else []
     thread_config = {
         "configurable": {
             "thread_id": request.session_id,
             "exam": request.exam,
-        }
+            "session_id": request.session_id,
+            "user_id": request.user_id,
+        },
+        "callbacks": callbacks,
+        "metadata": {
+            "langfuse_session_id": request.session_id,
+            "langfuse_user_id": request.user_id,
+            "langfuse_trace_name": "agent-chat",
+        },
+        "tags": ["agent", f"exam:{request.exam or 'unknown'}"],
     }
 
     input_state = {

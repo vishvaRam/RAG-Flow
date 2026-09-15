@@ -5,6 +5,7 @@ import httpx
 from langchain_core.documents import Document
 from langchain_openai import OpenAIEmbeddings
 from langchain_postgres.vectorstores import PGVector
+from langfuse import observe
 
 from app.core.config import get_settings
 from app.core.database import db_manager
@@ -75,6 +76,7 @@ class VectorService:
                 await asyncio.sleep(delay)
         return all_ids
 
+    @observe(name="reranking")
     async def _rerank(
         self,
         query: str,
@@ -121,6 +123,7 @@ class VectorService:
             )
             return documents[:top_n]
 
+    @observe(name="vector-search")
     async def search(
         self,
         query: str,
